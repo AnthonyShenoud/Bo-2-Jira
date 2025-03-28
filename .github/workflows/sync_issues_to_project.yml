@@ -11,5 +11,5 @@ jobs:
       - name: Add issue to GitHub Project
         uses: actions/add-to-project@v0.5.0
         with:
-          project-url: "https://github.com/users/AnthonyShenoud/projects/3"  # Your project URL
+          project-url: "https://github.com/users/AnthonyShenoud/projects/2" 
           github-token: ${{ secrets.GITHUB_TOKEN }}
