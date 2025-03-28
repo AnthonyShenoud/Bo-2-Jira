@@ -8,8 +8,9 @@ jobs:
   add-to-project:
     runs-on: ubuntu-latest
     steps:
-      - name: Add issue to GitHub Project
-        uses: actions/add-to-project@v0.5.0
-        with:
-          project-url: "https://github.com/users/AnthonyShenoud/projects/2"  # Correct format
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Add issue to ProjectV2
+        run: |
+          curl -X POST -H "Authorization: bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"query": "mutation { addProjectV2ItemById(input: {projectId: \"PVT_kwHOBF3sMs4A1Wjc\", contentId: \"${{ github.event.issue.node_id }}\"}) { item { id } } }"}' \
+            https://api.github.com/graphql
