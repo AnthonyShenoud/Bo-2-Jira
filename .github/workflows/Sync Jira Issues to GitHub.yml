@@ -1,0 +1,49 @@
+name: Sync Jira Issues to GitHub
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Runs every hour
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  sync-jira:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Fetch Jira Issues
+        env:
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_DOMAIN: "anthonyashenouda.atlassian.net"
+          JIRA_PROJECT_KEY: "SCRUM"  
+        run: |
+          curl -X GET -u "your-email@example.com:$JIRA_API_TOKEN" \
+            -H "Accept: application/json" \
+            "https://$JIRA_DOMAIN/rest/api/2/search?jql=project=$JIRA_PROJECT_KEY" \
+            | jq '.issues[] | {id: .id, key: .key, title: .fields.summary, body: .fields.description}' > jira_issues.json
+
+      - name: Create GitHub Issues
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: "AnthonyShenoud/Bo-2-Jira"
+        run: |
+          cat jira_issues.json | jq -c '.[]' | while read issue; do
+            title=$(echo $issue | jq -r '.title')
+            body=$(echo $issue | jq -r '.body')
+            jira_key=$(echo $issue | jq -r '.key')
+
+            response=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/$REPO/issues \
+              -d "{\"title\": \"$title\", \"body\": \"Jira Issue: $jira_key\n\n$body\"}")
+
+            echo "Created GitHub Issue: $(echo $response | jq -r '.html_url')"
+          done
+
+      - name: Add GitHub Issues to Project
+        uses: actions/add-to-project@v0.5.0
+        with:
+          project-url: "https://github.com/users/AnthonyShenoud/projects/2"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
