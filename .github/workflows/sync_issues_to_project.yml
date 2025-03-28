@@ -10,7 +10,7 @@ jobs:
     steps:
       - name: Add issue to ProjectV2
         run: |
-          curl -X POST -H "Authorization: bearer ${{ secrets.GITHUB_TOKEN }}" \
+          curl -X POST -H "Authorization: bearer ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"query": "mutation { addProjectV2ItemById(input: {projectId: \"PVT_kwHOBF3sMs4A1Wjc\", contentId: \"${{ github.event.issue.node_id }}\"}) { item { id } } }"}' \
             https://api.github.com/graphql
