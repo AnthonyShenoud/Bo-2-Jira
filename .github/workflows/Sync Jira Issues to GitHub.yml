@@ -18,7 +18,7 @@ jobs:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_DOMAIN: "anthonyashenouda.atlassian.net"
           JIRA_PROJECT_KEY: "SCRUM"
-          JIRA_USER: "anthonyashenouda.atlassian.net"  # Replace with your Jira email
+          JIRA_USER: "anthony.ashenouda@gmail.com"  # Replace with your Jira email
         run: |
           curl -X GET -u "$JIRA_USER:$JIRA_API_TOKEN" \
             -H "Accept: application/json" \
