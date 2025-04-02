@@ -38,8 +38,11 @@ jobs:
             team: (.fields.team.name // "No Team")
           }]' > jira_issues.json
             
-      - name: Debug Jira Issues JSON
-        run: cat jira_issues.json
+      - name: Debug Jira Issues JSON Content
+        run: |
+          echo "Checking JSON File Content..."
+          cat jira_issues.json
+          jq type jira_issues.json
 
       - name: Create GitHub Issues
         env:
