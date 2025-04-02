@@ -41,29 +41,28 @@ jobs:
       - name: Debug Jira Issues JSON
         run: cat jira_issues.json
 
-
       - name: Create GitHub Issues
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           REPO: "AnthonyShenoud/Bo-2-Jira"
         run: |
-          jq -c '.[]' jira_issues.json| while read issue; do
-              title=$(echo $issue | jq -r '.fields.summary')
-              body=$(echo $issue | jq -r '.fields.description')
+          jq -c '.[]' jira_issues.json | while read issue; do
+              title=$(echo $issue | jq -r '.title')
+              body=$(echo $issue | jq -r '.body')
               jira_key=$(echo $issue | jq -r '.key')
-              due_date=$(echo $issue | jq -r '.fields.duedate')
-              input=$(echo $issue | jq -r '.fields.customfield_10039')
-              output=$(echo $issue | jq -r '.fields.customfield_10040')
-              priority=$(echo $issue | jq -r '.fields.priority.name')
+              due_date=$(echo $issue | jq -r '.due_date')
+              input=$(echo $issue | jq -r '.input')
+              output=$(echo $issue | jq -r '.output')
+              priority=$(echo $issue | jq -r '.priority')
             
-              response=$(curl -s -X POST -H "Authorization: token $GH_PERSONAL_ACCESS_TOKEN" \
+              response=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
                 -H "Accept: application/vnd.github.v3+json" \
-                https://api.github.com/repos/AnthonyShenoud/Bo-2-Jira/issues \
+                https://api.github.com/repos/$REPO/issues \
                 -d "{\"title\": \"$title\", \"body\": \"$body\n\n**Jira Key:** $jira_key\n**Due Date:** $due_date\n**Priority:** $priority\n**Input:** $input\n**Output:** $output\"}")
               
               echo "GitHub Response: $response"
             done
-          
+
       - name: Add GitHub Issues to Project
         uses: actions/add-to-project@v0.5.0
         with:
