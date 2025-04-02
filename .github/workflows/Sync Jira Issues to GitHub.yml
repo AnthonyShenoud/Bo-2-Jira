@@ -43,8 +43,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: "AnthonyShenoud/Bo-2-Jira"
         run: |
-          cat jira_issues.json | jq -c '.[]' | while read issue; do
-            title=$(echo $issue | jq -r '.title')
+          cat jira_issues.json | jq -c '.issues[]' | while read issue; do
+            title=$(echo "$issue" | jq -r '.title')
             body=$(echo $issue | jq -r '.body')
             jira_key=$(echo $issue | jq -r '.key')
             due_date=$(echo $issue | jq -r '.due_date')
