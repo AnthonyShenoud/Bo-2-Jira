@@ -26,24 +26,28 @@ jobs:
             "https://$JIRA_DOMAIN/rest/api/2/search?jql=project=$JIRA_PROJECT_KEY")
           
           echo "Raw Jira response: $response"  # Debug output
-          echo "$response" | jq '.issues[] | {
-              id: .id,
-              key: .key,
-              title: .fields.summary,
-              body: .fields.description,
-              due_date: .fields.duedate,
-              input: .fields.customfield_10039,
-              output: .fields.customfield_10040,
-              priority: .fields.priority.name,
-              team: (.fields.team.name // "No Team")
-            }' > jira_issues.json
+          echo "$response" | jq '[.issues[] | {
+            id: .id,
+            key: .key,
+            title: .fields.summary,
+            body: .fields.description,
+            due_date: .fields.duedate,
+            input: .fields.customfield_10039,
+            output: .fields.customfield_10040,
+            priority: .fields.priority.name,
+            team: (.fields.team.name // "No Team")
+          }]' > jira_issues.json
+            
+      - name: Debug Jira Issues JSON
+        run: cat jira_issues.json
+
 
       - name: Create GitHub Issues
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           REPO: "AnthonyShenoud/Bo-2-Jira"
         run: |
-            cat jira_issues.json | jq -c '.issues[]' | while read issue; do
+          jq -c '.[]' jira_issues.json| while read issue; do
               title=$(echo $issue | jq -r '.fields.summary')
               body=$(echo $issue | jq -r '.fields.description')
               jira_key=$(echo $issue | jq -r '.key')
