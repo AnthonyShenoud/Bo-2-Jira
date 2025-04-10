@@ -84,11 +84,12 @@ jobs:
       
       - name: Add GitHub Issues to Project
         run: |
-          while read issue_id; do
-            echo "Adding issue $issue_id to project..."
-            gh project item-add "https://github.com/users/AnthonyShenoud/projects/2" --content-id "$issue_id"
+          while read issue_url; do
+            echo "Adding issue $issue_url to project..."
+            gh project item-add "https://github.com/users/AnthonyShenoud/projects/2" --url "$issue_url"
           done < github_issues.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+
 
 
