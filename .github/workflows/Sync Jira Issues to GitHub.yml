@@ -62,8 +62,7 @@ jobs:
               output=$(echo $issue | jq -r '.output')
               team=$(echo $issue | jq -r '.team')
               priority=$(echo $issue | jq -r '.priority')
-
-              # Create GitHub issue
+      
               response=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
                 -H "Accept: application/vnd.github.v3+json" \
                 https://api.github.com/repos/$REPO/issues \
@@ -71,17 +70,17 @@ jobs:
                   \"title\": \"$title\",
                   \"body\": \"### Jira Issue: $jira_key\\n\\n**Description:** $body\\n\\n**Due Date:** $due_date\\n\\n**Input:** $input\\n\\n**Output:** $output\\n\\n**Team:** $team\\n\\n**Priority:** $priority\"
                 }")
-
-              echo "GitHub Response: $response"
-              issue_id=$(echo $response | jq -r '.node_id')
-
-              if [[ "$issue_id" == "null" || -z "$issue_id" ]]; then
-                echo "Error: Issue ID is null or empty. Check issue creation step."
+      
+              issue_url=$(echo $response | jq -r '.html_url')
+      
+              if [[ "$issue_url" == "null" || -z "$issue_url" ]]; then
+                echo "Error: Issue URL is null or empty. Check issue creation step."
                 exit 1
               fi
-
-              echo "$issue_id" >> github_issues.txt
+      
+              echo "$issue_url" >> github_issues.txt
           done
+
       
       - name: Add GitHub Issues to Project
         run: |
