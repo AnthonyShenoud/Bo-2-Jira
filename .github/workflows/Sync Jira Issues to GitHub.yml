@@ -48,10 +48,13 @@ jobs:
         run: |
           echo "Content ID (input): $input"
 
-      - name: Create GitHub Issues
+      - name: Create GitHub Issues and Add to Project
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           REPO: "AnthonyShenoud/Bo-2-Jira"
+          PROJECT_ID: "PVT_kwHOBF3sMs4A1ZhT"  # your actual project node ID
+          STATUS_FIELD_ID: "PVTSSF_lAHOBF3sMs4A1ZhTzgq4Do0"    # replace with real status field ID
+          DONE_OPTION_ID: "98236657"    # replace with "Done" option's ID
         run: |
           jq -c '.[]' jira_issues.json | while read issue; do
               title=$(echo $issue | jq -r '.title')
@@ -63,22 +66,56 @@ jobs:
               team=$(echo $issue | jq -r '.team')
               priority=$(echo $issue | jq -r '.priority')
       
-              response=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
+              # Step 1: Create the GitHub Issue
+              issue_response=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
                 https://api.github.com/repos/$REPO/issues \
                 -d "{
                   \"title\": \"$title\",
-                  \"body\": \"### Jira Issue: $jira_key\\n\\n**Description:** $body\\n\\n**Due Date:** $due_date\\n\\n**Input:** $input\\n\\n**Output:** $output\\n\\n**Team:** $team\\n\\n**Priority:** $priority\"
+                  \"body\": \"### Jira Issue: $jira_key\\n\\n**Description:** $body\\n\\n**Due Date:** $due_date\\n\\n**Input:** $input\\n\\n**Output:** $output\\n\\n**Team:** $team\\n\\n**Priority:** $priority\",
+                  \"assignees\": [\"AnthonyShenoud\"]
                 }")
       
-              issue_url=$(echo $response | jq -r '.html_url')
+              issue_node_id=$(echo "$issue_response" | jq -r '.node_id')
+              issue_url=$(echo "$issue_response" | jq -r '.html_url')
       
               if [[ "$issue_url" == "null" || -z "$issue_url" ]]; then
-                echo "Error: Issue URL is null or empty. Check issue creation step."
+                echo "Error creating issue: $issue_response"
                 exit 1
               fi
       
-              echo "$issue_url" >> github_issues.txt
+              echo "Created issue: $issue_url"
+      
+              # Step 2: Add the issue to the project
+              item_id=$(gh api graphql -f query='
+                mutation($projectId:ID!, $contentId:ID!) {
+                  addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                    item {
+                      id
+                    }
+                  }
+                }' -f projectId="$PROJECT_ID" -f contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
+      
+              echo "Added to project with item ID: $item_id"
+      
+              # Step 3: Update the status to "Done"
+              gh api graphql -f query='
+                mutation($input: UpdateProjectV2ItemFieldValueInput!) {
+                  updateProjectV2ItemFieldValue(input: $input) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }' -f input='{
+                  "projectId": "'"$PROJECT_ID"'",
+                  "itemId": "'"$item_id"'",
+                  "fieldId": "'"$STATUS_FIELD_ID"'",
+                  "value": {
+                    "singleSelectOptionId": "'"$DONE_OPTION_ID"'"
+                  }
+                }'
+      
+              echo "Updated status to Done"
           done
 
       
