@@ -1,10 +1,7 @@
 name: Sync Jira Issues to GitHub
 
 on:
-  # Uncomment below to run on a schedule (e.g. hourly)
-  # schedule:
-  #   - cron: '0 * * * *'
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger for now
 
 jobs:
   sync-jira:
@@ -14,19 +11,20 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Fetch and Transform Jira Issues
+      - name: Fetch Jira Issues
         env:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_DOMAIN: "anthonyashenouda.atlassian.net"
           JIRA_PROJECT_KEY: "SCRUM"
           JIRA_USER: "anthony.ashenouda@gmail.com"
         run: |
-          echo "Fetching issues from Jira..."
-          response=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
+          echo "Fetching Jira issues..."
+          response=$(curl -s -X GET -u "$JIRA_USER:$JIRA_API_TOKEN" \
             -H "Accept: application/json" \
             "https://$JIRA_DOMAIN/rest/api/2/search?jql=project=$JIRA_PROJECT_KEY")
+          
+          echo "Raw response: $response"
 
-          echo "Transforming response..."
           echo "$response" | jq '[.issues[] | {
             id: .id,
             key: .key,
@@ -38,20 +36,21 @@ jobs:
             priority: .fields.priority.name,
             team: (.fields.team.name // "No Team"),
             status: .fields.status.name,
-            assignee: (.fields.assignee.name // empty)
+            assignee: (.fields.assignee.emailAddress // empty)
           }]' > jira_issues.json
 
-      - name: Display Transformed Jira Issues
-        run: cat jira_issues.json
+      - name: Debug Jira JSON Content
+        run: |
+          echo "Parsed Jira issues:"
+          cat jira_issues.json
 
-      - name: Create GitHub Issues and Sync with Project
+      - name: Create GitHub Issues
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           REPO: "AnthonyShenoud/Bo-2-Jira"
           PROJECT_ID: "PVT_kwHOBF3sMs4A1ZhT"
           STATUS_FIELD_ID: "PVTSSF_lAHOBF3sMs4A1ZhTzgq4Do0"
         run: |
-          # Status Mapping
           declare -A STATUS_MAP=(
             ["To Do"]="61e4505c"
             ["In Progress"]="47fc9ee4"
@@ -60,14 +59,13 @@ jobs:
             ["Done"]="98236657"
           )
 
-          # Assignee Mapping
           declare -A USER_MAP=(
             ["anthony.ashenouda@gmail.com"]="AnthonyShenoud"
             ["anthony.ashenouda1@gmail.com"]="TintinShenouda"
             ["mariacampagnolo2001@gmail.com"]="MariaCampagnolo"
           )
 
-          jq -c '.[]' jira_issues.json | while read issue; do
+          jq -c '.[]' jira_issues.json | while read -r issue; do
             title=$(echo "$issue" | jq -r '.title')
             body=$(echo "$issue" | jq -r '.body')
             jira_key=$(echo "$issue" | jq -r '.key')
@@ -79,76 +77,68 @@ jobs:
             status=$(echo "$issue" | jq -r '.status')
             assignee=$(echo "$issue" | jq -r '.assignee')
 
-            # Resolve GitHub username
             github_username="${USER_MAP[$assignee]}"
-            if [[ -z "$github_username" ]]; then
-              echo "⚠️ No GitHub username mapped for assignee: $assignee"
-              assignees_json="[]"
-            else
+            assignees_json="[]"
+            if [[ -n "$github_username" ]]; then
               assignees_json="[\"$github_username\"]"
             fi
 
-            # Create GitHub Issue
-            echo "Creating GitHub issue for Jira: $jira_key..."
+            echo "Creating issue for: $jira_key ($title)"
+
             issue_response=$(curl -s -X POST \
               -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               https://api.github.com/repos/$REPO/issues \
               -d "{
                 \"title\": \"$title\",
-                \"body\": \"### Jira Issue: $jira_key\\n\\n**Description:** $body\\n\\n**Due Date:** $due_date\\n\\n**Input:** $input\\n\\n**Output:** $output\\n\\n**Team:** $team\\n\\n**Priority:** $priority\",
+                \"body\": \"### Jira: $jira_key\\n\\n**Description**: $body\\n\\n**Due**: $due_date\\n**Input**: $input\\n**Output**: $output\\n**Team**: $team\\n**Priority**: $priority\",
                 \"assignees\": $assignees_json
               }")
+
+            echo "GitHub API response: $issue_response"
 
             issue_node_id=$(echo "$issue_response" | jq -r '.node_id')
             issue_url=$(echo "$issue_response" | jq -r '.html_url')
 
-            if [[ "$issue_url" == "null" || -z "$issue_url" ]]; then
-              echo "❌ Error creating GitHub issue: $issue_response"
+            if [[ "$issue_node_id" == "null" || -z "$issue_node_id" ]]; then
+              echo "⚠️ Failed to create GitHub issue for $jira_key"
               continue
             fi
 
-            echo "✅ Created GitHub issue: $issue_url"
+            echo "✅ Created issue: $issue_url"
 
             # Add to GitHub Project
             item_id=$(gh api graphql -f query='
               mutation($projectId:ID!, $contentId:ID!) {
                 addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
-                  item {
-                    id
-                  }
+                  item { id }
                 }
               }' -f projectId="$PROJECT_ID" -f contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
 
-            echo "➕ Added issue to project with item ID: $item_id"
+            echo "📦 Added to project. Item ID: $item_id"
 
-            # Update Project Status
+            # Update status
             status_option_id="${STATUS_MAP[$status]}"
-            if [[ -z "$status_option_id" ]]; then
-              echo "⚠️ Unknown Jira status: $status. Skipping status update."
-              continue
+            if [[ -n "$status_option_id" ]]; then
+              gh api graphql -f query='
+                mutation UpdateStatus($input: UpdateProjectV2ItemFieldValueInput!) {
+                  updateProjectV2ItemFieldValue(input: $input) {
+                    projectV2Item { id }
+                  }
+                }' -f input="$(jq -n --arg projectId "$PROJECT_ID" \
+                                      --arg itemId "$item_id" \
+                                      --arg fieldId "$STATUS_FIELD_ID" \
+                                      --arg optionId "$status_option_id" \
+                                      '{
+                                        projectId: $projectId,
+                                        itemId: $itemId,
+                                        fieldId: $fieldId,
+                                        value: {
+                                          singleSelectOptionId: $optionId
+                                        }
+                                      }')"
+              echo "✅ Status set to $status"
+            else
+              echo "⚠️ No mapping for status: $status"
             fi
-
-            gh api graphql --jq '.data.updateProjectV2ItemFieldValue.projectV2Item.id' -f query='
-              mutation UpdateStatus($input: UpdateProjectV2ItemFieldValueInput!) {
-                updateProjectV2ItemFieldValue(input: $input) {
-                  projectV2Item {
-                    id
-                  }
-                }
-              }' -f input="$(jq -n \
-                --arg projectId "$PROJECT_ID" \
-                --arg itemId "$item_id" \
-                --arg fieldId "$STATUS_FIELD_ID" \
-                --arg optionId "$status_option_id" \
-                '{
-                  projectId: $projectId,
-                  itemId: $itemId,
-                  fieldId: $fieldId,
-                  value: {
-                    singleSelectOptionId: $optionId
-                  }
-                }')"
-
-            echo "🟢 Updated project status to: $status"
           done
