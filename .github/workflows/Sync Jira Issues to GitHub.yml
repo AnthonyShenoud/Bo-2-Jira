@@ -120,23 +120,25 @@ jobs:
             # Update status
             status_option_id="${STATUS_MAP[$status]}"
             if [[ -n "$status_option_id" ]]; then
-              gh api graphql -f query='
+              json_input=$(jq -c --arg projectId "$PROJECT_ID" \
+                                --arg itemId "$item_id" \
+                                --arg fieldId "$STATUS_FIELD_ID" \
+                                --arg optionId "$status_option_id" \
+                                '{
+                                  projectId: $projectId,
+                                  itemId: $itemId,
+                                  fieldId: $fieldId,
+                                  value: { singleSelectOptionId: $optionId }
+                                }')
+
+              echo "JSON Input for Status Update: $json_input"
+
+              gh api graphql -F query='
                 mutation UpdateStatus($input: UpdateProjectV2ItemFieldValueInput!) {
                   updateProjectV2ItemFieldValue(input: $input) {
                     projectV2Item { id }
                   }
-                }' -F input="$(jq -c --arg projectId "$PROJECT_ID" \
-                                      --arg itemId "$item_id" \
-                                      --arg fieldId "$STATUS_FIELD_ID" \
-                                      --arg optionId "$status_option_id" \
-                                      '{
-                                        projectId: $projectId,
-                                        itemId: $itemId,
-                                        fieldId: $fieldId,
-                                        value: {
-                                          singleSelectOptionId: $optionId
-                                        }
-                                      }')"
+                }' -F input="$json_input"
               echo "✅ Status set to $status"
             else
               echo "⚠️ No mapping for status: $status"
