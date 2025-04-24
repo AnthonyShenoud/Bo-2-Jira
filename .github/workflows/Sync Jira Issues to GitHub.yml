@@ -113,7 +113,7 @@ jobs:
                 addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
                   item { id }
                 }
-              }' -f projectId="$PROJECT_ID" -f contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
+              }' -F projectId="$PROJECT_ID" -F contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
 
             echo "📦 Added to project. Item ID: $item_id"
 
@@ -125,7 +125,7 @@ jobs:
                   updateProjectV2ItemFieldValue(input: $input) {
                     projectV2Item { id }
                   }
-                }' -f input="$(jq -n --arg projectId "$PROJECT_ID" \
+                }' -F input="$(jq -c --arg projectId "$PROJECT_ID" \
                                       --arg itemId "$item_id" \
                                       --arg fieldId "$STATUS_FIELD_ID" \
                                       --arg optionId "$status_option_id" \
