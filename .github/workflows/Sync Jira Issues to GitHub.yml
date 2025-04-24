@@ -99,21 +99,26 @@ jobs:
               echo "Added to project with item ID: $item_id"
       
               # Step 3: Update the status to "Done"
-              gh api graphql -f query='
-                mutation($input: UpdateProjectV2ItemFieldValueInput!) {
+              gh api graphql --jq '.data.updateProjectV2ItemFieldValue.projectV2Item.id' -f query='
+                mutation UpdateStatus($input: UpdateProjectV2ItemFieldValueInput!) {
                   updateProjectV2ItemFieldValue(input: $input) {
                     projectV2Item {
                       id
                     }
                   }
-                }' -f input='{
-                  "projectId": "'"$PROJECT_ID"'",
-                  "itemId": "'"$item_id"'",
-                  "fieldId": "'"$STATUS_FIELD_ID"'",
-                  "value": {
-                    "singleSelectOptionId": "'"$DONE_OPTION_ID"'"
-                  }
-                }'
+                }' -f input="$(jq -n --arg projectId "$PROJECT_ID" \
+                        --arg itemId "$item_id" \
+                        --arg fieldId "$STATUS_FIELD_ID" \
+                        --arg optionId "$DONE_OPTION_ID" \
+                        '{
+                          projectId: $projectId,
+                          itemId: $itemId,
+                          fieldId: $fieldId,
+                          value: {
+                            singleSelectOptionId: $optionId
+                          }
+                        }')"
+
       
               echo "Updated status to Done"
           done
