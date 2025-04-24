@@ -35,7 +35,8 @@ jobs:
             input: .fields.customfield_10039,
             output: .fields.customfield_10040,
             priority: .fields.priority.name,
-            team: (.fields.team.name // "No Team")
+            team: (.fields.team.name // "No Team"),
+            status: .fields.status.name
           }]' > jira_issues.json
             
       - name: Debug Jira Issues JSON Content
