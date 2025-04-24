@@ -97,6 +97,25 @@ jobs:
                 }' -f projectId="$PROJECT_ID" -f contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
       
               echo "Added to project with item ID: $item_id"
+
+              # 🟨 Define status mapping from Jira to GitHub
+              declare -A STATUS_MAP
+              STATUS_MAP["To Do"]="61e4505c"
+              STATUS_MAP["In Progress"]="47fc9ee4"
+              STATUS_MAP["In Review"]="df73e18b"
+              STATUS_MAP["Backlog"]="f75ad846"
+              STATUS_MAP["Done"]="98236657"  # already known
+            
+              # 🟩 Extract Jira status from the issue (you'll need to modify the earlier `jq` block to include this)
+              jira_status=$(echo $issue | jq -r '.status')  # Assuming you add `.status: .fields.status.name` in JSON generation
+            
+              # 🟥 Lookup corresponding GitHub status option ID
+              status_option_id="${STATUS_MAP[$jira_status]}"
+            
+              if [[ -z "$status_option_id" ]]; then
+                echo "Unknown or unmapped Jira status: $jira_status. Skipping status update."
+                continue
+              fi
       
               # Step 3: Update the status to "Done"
               gh api graphql --jq '.data.updateProjectV2ItemFieldValue.projectV2Item.id' -f query='
@@ -109,7 +128,7 @@ jobs:
                 }' -f input="$(jq -n --arg projectId "$PROJECT_ID" \
                         --arg itemId "$item_id" \
                         --arg fieldId "$STATUS_FIELD_ID" \
-                        --arg optionId "$DONE_OPTION_ID" \
+                        --arg optionId "$status_option_id" \
                         '{
                           projectId: $projectId,
                           itemId: $itemId,
