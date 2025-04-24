@@ -124,6 +124,11 @@ jobs:
               continue
             fi
 
+            if [[ -z "$PROJECT_ID" || -z "$item_id" || -z "$STATUS_FIELD_ID" ]]; then
+              echo "⚠️ Missing required variables for status update. Skipping."
+              continue
+            fi
+
             json_input=$(jq -c --arg projectId "$PROJECT_ID" \
                               --arg itemId "$item_id" \
                               --arg fieldId "$STATUS_FIELD_ID" \
