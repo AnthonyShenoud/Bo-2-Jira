@@ -76,7 +76,7 @@ jobs:
                 -d "{
                   \"title\": \"$title\",
                   \"body\": \"### Jira Issue: $jira_key\\n\\n**Description:** $body\\n\\n**Due Date:** $due_date\\n\\n**Input:** $input\\n\\n**Output:** $output\\n\\n**Team:** $team\\n\\n**Priority:** $priority\",
-                  \"assignees\": [\"AnthonyShenoud\"]
+                  \"assignees\": $assignees_json
                 }")
       
               issue_node_id=$(echo "$issue_response" | jq -r '.node_id')
@@ -119,6 +119,21 @@ jobs:
                 echo "Unknown or unmapped Jira status: $jira_status. Skipping status update."
                 continue
               fi
+
+              declare -A USER_MAP
+              USER_MAP["anthony.ashenouda@gmail.com"]="AnthonyShenoud"
+              USER_MAP["anthony.ashenouda1@gmail.com"]="TintinShenouda"
+              USER_MAP["mariacampagnolo2001@gmail.com"]="MariaCampagnolo"
+              assignee_github="${USER_MAP[$jira_assignee]}"
+
+              assignee=$(echo $issue | jq -r '.assignee')
+
+              if [[ -z "$assignee" || "$assignee" == "null" ]]; then
+                assignees_json="[]"
+              else
+                assignees_json="[\"$assignee\"]"
+              fi
+
       
               # Step 3: Update the status to "Done"
               gh api graphql --jq '.data.updateProjectV2ItemFieldValue.projectV2Item.id' -f query='
