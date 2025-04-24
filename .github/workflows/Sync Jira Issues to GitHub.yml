@@ -120,19 +120,28 @@ jobs:
                 continue
               fi
 
+              # Extract assignee from Jira issue
+              assignee=$(echo $issue | jq -r '.assignee')
+              
+              # Declare the user mapping
               declare -A USER_MAP
               USER_MAP["anthony.ashenouda@gmail.com"]="AnthonyShenoud"
               USER_MAP["anthony.ashenouda1@gmail.com"]="TintinShenouda"
               USER_MAP["mariacampagnolo2001@gmail.com"]="MariaCampagnolo"
-              assignee_github="${USER_MAP[$jira_assignee]}"
-
-              assignee=$(echo $issue | jq -r '.assignee')
-
+              
+              # Convert to GitHub username and create assignee JSON
               if [[ -z "$assignee" || "$assignee" == "null" ]]; then
                 assignees_json="[]"
               else
-                assignees_json="[\"$assignee\"]"
+                github_username="${USER_MAP[$assignee]}"
+                if [[ -z "$github_username" ]]; then
+                  echo "⚠️ No GitHub username mapped for assignee: $assignee"
+                  assignees_json="[]"
+                else
+                  assignees_json="[\"$github_username\"]"
+                fi
               fi
+
 
       
               # Step 3: Update the status to "Done"
