@@ -114,21 +114,26 @@ jobs:
                   item { id }
                 }
               }' -F projectId="$PROJECT_ID" -F contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
-
+            
             echo "📦 Added to project. Item ID: $item_id"
-
+            
             # Update status
             status_option_id="${STATUS_MAP[$status]}"
             if [[ -z "$status_option_id" ]]; then
               echo "⚠️ No valid status mapping for '$status'. Skipping status update."
               continue
             fi
-
+            
             if [[ -z "$PROJECT_ID" || -z "$item_id" || -z "$STATUS_FIELD_ID" ]]; then
               echo "⚠️ Missing required variables for status update. Skipping."
               continue
             fi
-
+            
+            echo "PROJECT_ID: $PROJECT_ID"
+            echo "item_id: $item_id"
+            echo "STATUS_FIELD_ID: $STATUS_FIELD_ID"
+            echo "status_option_id: $status_option_id"
+            
             json_input=$(jq -c --arg projectId "$PROJECT_ID" \
                               --arg itemId "$item_id" \
                               --arg fieldId "$STATUS_FIELD_ID" \
@@ -139,9 +144,9 @@ jobs:
                                 fieldId: $fieldId,
                                 value: { singleSelectOptionId: $optionId }
                               }')
-
+            
             echo "JSON Input for Status Update: $json_input"
-
+            
             gh api graphql -F query='
               mutation UpdateStatus($input: UpdateProjectV2ItemFieldValueInput!) {
                 updateProjectV2ItemFieldValue(input: $input) {
