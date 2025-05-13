@@ -1,7 +1,7 @@
 name: Sync Jira Issues to GitHub
 
 on:
-  workflow_dispatch:  # Manual trigger for now
+  workflow_dispatch:
 
 jobs:
   sync-jira:
@@ -22,8 +22,6 @@ jobs:
           response=$(curl -s -X GET -u "$JIRA_USER:$JIRA_API_TOKEN" \
             -H "Accept: application/json" \
             "https://$JIRA_DOMAIN/rest/api/2/search?jql=project=$JIRA_PROJECT_KEY")
-          
-          echo "Raw response: $response"
 
           echo "$response" | jq '[.issues[] | {
             id: .id,
@@ -40,9 +38,7 @@ jobs:
           }]' > jira_issues.json
 
       - name: Debug Jira JSON Content
-        run: |
-          echo "Parsed Jira issues:"
-          cat jira_issues.json
+        run: cat jira_issues.json
 
       - name: Create GitHub Issues
         env:
@@ -107,62 +103,42 @@ jobs:
 
             echo "✅ Created issue: $issue_url"
 
-            # Add to GitHub Project
             item_id=$(gh api graphql -f query='
               mutation($projectId:ID!, $contentId:ID!) {
                 addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
                   item { id }
                 }
               }' -F projectId="$PROJECT_ID" -F contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
-            
+
             echo "📦 Added to project. Item ID: $item_id"
-            
+
             # Update status
             status_option_id="${STATUS_MAP[$status]}"
             if [[ -z "$status_option_id" ]]; then
               echo "⚠️ No valid status mapping for '$status'. Skipping status update."
               continue
             fi
-            
-            if [[ -z "$PROJECT_ID" || -z "$item_id" || -z "$STATUS_FIELD_ID" ]]; then
-              echo "⚠️ Missing required variables for status update. Skipping."
-              continue
-            fi
-            
+
             echo "PROJECT_ID: $PROJECT_ID"
             echo "item_id: $item_id"
             echo "STATUS_FIELD_ID: $STATUS_FIELD_ID"
             echo "status_option_id: $status_option_id"
-            
-            # Debug JSON construction
-            json_input=$(jq -c --arg projectId "$PROJECT_ID" \
-                              --arg itemId "$item_id" \
-                              --arg fieldId "$STATUS_FIELD_ID" \
-                              --arg optionId "$status_option_id" \
-                              '{
-                                projectId: $projectId,
-                                itemId: $itemId,
-                                fieldId: $fieldId,
-                                value: { singleSelectOptionId: $optionId }
-                              }' 2>&1)
-            
-            if [[ -z "$json_input" || "$json_input" == *"error"* ]]; then
-              echo "⚠️ JSON construction failed. jq output: $json_input"
-              continue
-            fi
-            
-            echo "JSON Input for Status Update: $json_input"
-            
-            # Attempt to update status
-            gh api graphql -F query='
-              mutation UpdateStatus($input: UpdateProjectV2ItemFieldValueInput!) {
+
+            gh api graphql --silent -f query='
+              mutation($input: UpdateProjectV2ItemFieldValueInput!) {
                 updateProjectV2ItemFieldValue(input: $input) {
-                  projectV2Item { id }
+                  projectV2Item {
+                    id
+                  }
                 }
-              }' -F input="$json_input" || {
+              }' \
+              -f input.projectId="$PROJECT_ID" \
+              -f input.itemId="$item_id" \
+              -f input.fieldId="$STATUS_FIELD_ID" \
+              -f input.value.singleSelectOptionId="$status_option_id" || {
                 echo "⚠️ Failed to update status for item $item_id. Skipping."
                 continue
               }
-            
+
             echo "✅ Status set to $status"
           done
