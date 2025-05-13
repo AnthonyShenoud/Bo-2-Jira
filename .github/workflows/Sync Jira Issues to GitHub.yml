@@ -59,11 +59,18 @@ jobs:
           STATUS_FIELD_ID: "PVTSSF_lAHOBF3sMs4A1ZhTzgq4Do0"
         run: |
           declare -A STATUS_MAP=(
-            ["To Do"]="61e4505c"
-            ["In Progress"]="47fc9ee4"
-            ["In Review"]="df73e18b"
-            ["Backlog"]="f75ad846"
-            ["Done"]="98236657"
+            ["backlog"]="f75ad846"      # GitHub "Backlog"
+            ["ready"]="61e4505c"        # GitHub "Ready"
+            ["todo"]="61e4505c"         # Jira "To Do" → "Ready"
+            ["to do"]="61e4505c"
+            ["in progress"]="47fc9ee4"  # GitHub "In progress"
+            ["inprogress"]="47fc9ee4"
+            ["in review"]="df73e18b"    # GitHub "In review"
+            ["inreview"]="df73e18b"
+            ["review"]="df73e18b"
+            ["done"]="98236657"         # GitHub "Done"
+            ["closed"]="98236657"
+            ["resolved"]="98236657"
           )
 
           declare -A USER_MAP=(
