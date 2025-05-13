@@ -144,10 +144,10 @@ jobs:
                                 itemId: $itemId,
                                 fieldId: $fieldId,
                                 value: { singleSelectOptionId: $optionId }
-                              }')
+                              }' 2>&1)
             
-            if [[ -z "$json_input" ]]; then
-              echo "⚠️ JSON construction failed. Skipping status update."
+            if [[ -z "$json_input" || "$json_input" == *"error"* ]]; then
+              echo "⚠️ JSON construction failed. jq output: $json_input"
               continue
             fi
             
