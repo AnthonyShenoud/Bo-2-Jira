@@ -57,7 +57,6 @@ jobs:
           REPO: "AnthonyShenoud/Bo-2-Jira"
           PROJECT_ID: "PVT_kwHOBF3sMs4A1ZhT"
           STATUS_FIELD_ID: "PVTSSF_lAHOBF3sMs4A1ZhTzgq4Do0"
-          DATE_FIELD_ID: "PVTSSF_lAHOBF3sMs4A1ZhTzgq4Do1"
         run: |
           # Map Jira statuses to GitHub status options
           declare -A STATUS_MAP=(
@@ -144,42 +143,21 @@ jobs:
               continue
             fi
 
-            gh api graphql -f query='
-              mutation(
-                $project: ID!
-                $item: ID!
-                $status_field: ID!
-                $status_value: String!
-                $date_field: ID!
-                $date_value: Date!
-              ) {
-                set_status: updateProjectV2ItemFieldValue(input: {
-                  projectId: $project
-                  itemId: $item
-                  fieldId: $status_field
-                  value: { singleSelectOptionId: $status_value }
-                }) {
-                  projectV2Item {
-                    id
-                  }
-                }
-                set_date_posted: updateProjectV2ItemFieldValue(input: {
-                  projectId: $project
-                  itemId: $item
-                  fieldId: $date_field
-                  value: { date: $date_value }
-                }) {
+            gh api graphql --silent -f query='
+              mutation($input: UpdateProjectV2ItemFieldValueInput!) {
+                updateProjectV2ItemFieldValue(input: $input) {
                   projectV2Item {
                     id
                   }
                 }
               }' \
-              -f project="$PROJECT_ID" \
-              -f item="$item_id" \
-              -f status_field="$STATUS_FIELD_ID" \
-              -f status_value="$status_option_id" \
-              -f date_field="$DATE_FIELD_ID" \
-              -f date_value="$(date --utc +%Y-%m-%dT%H:%M:%SZ)" --silent
+              -f input.projectId="$PROJECT_ID" \
+              -f input.itemId="$item_id" \
+              -f input.fieldId="$STATUS_FIELD_ID" \
+              -f input.value.singleSelectOptionId="$status_option_id" || {
+                echo "⚠️ Failed to update status for item $item_id. Skipping."
+                continue
+              }
 
             echo "✅ Status set to '$status'"
           done
