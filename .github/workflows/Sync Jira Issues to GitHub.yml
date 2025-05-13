@@ -58,29 +58,28 @@ jobs:
           PROJECT_ID: "PVT_kwHOBF3sMs4A1ZhT"
           STATUS_FIELD_ID: "PVTSSF_lAHOBF3sMs4A1ZhTzgq4Do0"
         run: |
+          # Map Jira statuses to GitHub status options
           declare -A STATUS_MAP=(
             ["backlog"]="f75ad846"
             ["ready"]="61e4505c"
             ["todo"]="61e4505c"
             ["to do"]="61e4505c"
-            ["In Progress"]="In Progress"
-            ["47fc9ee4"]="In Progress"
-            ["inprogress"]="47fc9ee4"
-            ["in review"]="df73e18b"
-            ["In Review"]="Todo"
+            ["in progress"]="47fc9ee4"
             ["inreview"]="df73e18b"
             ["review"]="df73e18b"
-            ["Done"]="98236657"
+            ["done"]="98236657"
             ["closed"]="98236657"
             ["resolved"]="98236657"
           )
 
+          # Map Jira assignees to GitHub usernames
           declare -A USER_MAP=(
             ["712020:adc4902f-4b9b-4ee1-a517-5d24a6fd51a6"]="AnthonyShenoud"
             ["712020:b41cbe18-4f26-468d-a2c0-8a4331eef3a1"]="TintinShenouda"
             ["712020:9c9704fc-f1a0-49c9-9f9e-3bf543da02c7"]="MariaCampagnolo"
           )
 
+          # Loop through each Jira issue and create corresponding GitHub issue
           jq -c '.[]' jira_issues.json | while read -r issue; do
             title=$(echo "$issue" | jq -r '.title')
             body=$(echo "$issue" | jq -r '.body')
@@ -127,6 +126,7 @@ jobs:
 
             echo "✅ Created GitHub issue: $issue_url"
 
+            # Add the issue to GitHub Project
             item_id=$(gh api graphql -f query='
               mutation($projectId:ID!, $contentId:ID!) {
                 addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
@@ -136,6 +136,7 @@ jobs:
 
             echo "📦 Added to GitHub Project. Item ID: $item_id"
 
+            # Update the status field in the GitHub project
             status_option_id="${STATUS_MAP[$status]}"
             if [[ -z "$status_option_id" ]]; then
               echo "⚠️ No valid status mapping for '$status'. Skipping status update."
@@ -158,5 +159,5 @@ jobs:
                 continue
               }
 
-            echo "✅ Status set to '${status}'"
+            echo "✅ Status set to '$status'"
           done
