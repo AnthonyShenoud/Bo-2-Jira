@@ -65,7 +65,7 @@ jobs:
             ["to do"]="61e4505c"
             ["in progress"]="47fc9ee4"  # GitHub "In progress"
             ["inprogress"]="47fc9ee4"
-            ["in review"]="df73e18b"    # GitHub "In review"
+            ["In Review"]="df73e18b"    # GitHub "In review"
             ["inreview"]="df73e18b"
             ["review"]="df73e18b"
             ["done"]="98236657"         # GitHub "Done"
