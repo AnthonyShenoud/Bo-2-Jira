@@ -59,16 +59,16 @@ jobs:
           STATUS_FIELD_ID: "PVTSSF_lAHOBF3sMs4A1ZhTzgq4Do0"
         run: |
           declare -A STATUS_MAP=(
-            ["backlog"]="f75ad846"      # GitHub "Backlog"
-            ["ready"]="61e4505c"        # GitHub "Ready"
-            ["todo"]="61e4505c"         # Jira "To Do" → "Ready"
+            ["backlog"]="f75ad846"
+            ["ready"]="61e4505c"
+            ["todo"]="61e4505c"
             ["to do"]="61e4505c"
-            ["in progress"]="47fc9ee4"  # GitHub "In progress"
+            ["in progress"]="47fc9ee4"
             ["inprogress"]="47fc9ee4"
-            ["In Review"]="df73e18b"    # GitHub "In review"
+            ["in review"]="df73e18b"
             ["inreview"]="df73e18b"
             ["review"]="df73e18b"
-            ["done"]="98236657"         # GitHub "Done"
+            ["done"]="98236657"
             ["closed"]="98236657"
             ["resolved"]="98236657"
           )
@@ -88,7 +88,7 @@ jobs:
             output=$(echo "$issue" | jq -r '.output')
             team=$(echo "$issue" | jq -r '.team')
             priority=$(echo "$issue" | jq -r '.priority')
-            status=$(echo "$issue" | jq -r '.status')
+            status=$(echo "$issue" | jq -r '.status' | tr '[:upper:]' '[:lower:]' | tr -d ' ')
             assignee=$(echo "$issue" | jq -r '.assignee')
 
             github_username="${USER_MAP[$assignee]}"
@@ -97,10 +97,9 @@ jobs:
               assignees_json=$(jq -n --arg u "$github_username" '[ $u ]')
             fi
 
-            echo "🔍 Jira assignee email: $assignee"
+            echo "🔍 Jira assignee account ID: $assignee"
             echo "🔗 Mapped GitHub username: $github_username"
-
-            echo "Creating issue for: $jira_key ($title)"
+            echo "Creating GitHub issue for: $jira_key ($title)"
 
             issue_payload=$(jq -n \
               --arg title "$title" \
@@ -114,7 +113,6 @@ jobs:
               https://api.github.com/repos/$REPO/issues \
               -d "$issue_payload")
 
-
             echo "GitHub API response: $issue_response"
 
             issue_node_id=$(echo "$issue_response" | jq -r '.node_id')
@@ -125,7 +123,7 @@ jobs:
               continue
             fi
 
-            echo "✅ Created issue: $issue_url"
+            echo "✅ Created GitHub issue: $issue_url"
 
             item_id=$(gh api graphql -f query='
               mutation($projectId:ID!, $contentId:ID!) {
@@ -134,7 +132,7 @@ jobs:
                 }
               }' -F projectId="$PROJECT_ID" -F contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
 
-            echo "📦 Added to project. Item ID: $item_id"
+            echo "📦 Added to GitHub Project. Item ID: $item_id"
 
             status_option_id="${STATUS_MAP[$status]}"
             if [[ -z "$status_option_id" ]]; then
@@ -158,5 +156,5 @@ jobs:
                 continue
               }
 
-            echo "✅ Status set to $status"
+            echo "✅ Status set to '${status}'"
           done
