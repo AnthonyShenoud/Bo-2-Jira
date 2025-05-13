@@ -67,9 +67,9 @@ jobs:
           )
 
           declare -A USER_MAP=(
-            ["Anthony Shenouda"]="AnthonyShenoud"
-            ["Tintin Shenouda"]="TintinShenouda"
-            ["Maria Campagnolo"]="MariaCampagnolo"
+            ["anthony.ashenouda@gmail.com"]="AnthonyShenoud"
+            ["tintin@example.com"]="TintinShenouda"
+            ["maria@example.com"]="MariaCampagnolo"
           )
 
           jq -c '.[]' jira_issues.json | while read -r issue; do
@@ -87,8 +87,11 @@ jobs:
             github_username="${USER_MAP[$assignee]}"
             assignees_json="[]"
             if [[ -n "$github_username" ]]; then
-              assignees_json="[\"$github_username\"]"
+              assignees_json=$(jq -n --arg u "$github_username" '[ $u ]')
             fi
+
+            echo "🔍 Jira assignee email: $assignee"
+            echo "🔗 Mapped GitHub username: $github_username"
 
             echo "Creating issue for: $jira_key ($title)"
 
@@ -103,6 +106,7 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               https://api.github.com/repos/$REPO/issues \
               -d "$issue_payload")
+
 
             echo "GitHub API response: $issue_response"
 
