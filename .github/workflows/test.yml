@@ -1,0 +1,46 @@
+name: Jira to GitHub Sync
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync_jira_to_github:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Fetch Jira Issues
+      id: fetch_jira
+      run: |
+        curl -X GET "https://your-jira-instance.atlassian.net/rest/api/2/search?jql=project=SCRUM" \
+        -H "Authorization: Bearer ${{ secrets.JIRA_API_TOKEN }}" \
+        -o jira_issues.json
+
+    - name: Create GitHub Issues and Sync Status
+      run: |
+        jq -c '.issues[]' jira_issues.json | while read issue; do
+          ISSUE_KEY=$(echo "$issue" | jq -r '.key')
+          ISSUE_TITLE=$(echo "$issue" | jq -r '.fields.summary')
+          ISSUE_STATUS=$(echo "$issue" | jq -r '.fields.status.name')
+          
+          # Map Jira status to GitHub status
+          if [[ "$ISSUE_STATUS" == "Done" ]]; then
+            GH_STATUS="closed"
+          elif [[ "$ISSUE_STATUS" == "In Progress" ]]; then
+            GH_STATUS="open"
+          else
+            GH_STATUS="open"
+          fi
+
+          # Create GitHub issue
+          gh issue create --title "$ISSUE_TITLE" --body "Created from Jira issue $ISSUE_KEY" --label "$ISSUE_STATUS" --assignee "$GH_ASSIGNEE"
+
+          # Update GitHub project item status (ensure field is configured correctly)
+          gh project item update --project-id $PROJECT_ID --item-id $ITEM_ID --field "Status" --value "$GH_STATUS"
+
+          echo "Issue $ISSUE_KEY synced successfully with GitHub!"
+        done
