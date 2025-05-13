@@ -65,6 +65,7 @@ jobs:
             ["todo"]="61e4505c"
             ["to do"]="61e4505c"
             ["in progress"]="47fc9ee4"
+            ["inprogress"]="47fc9ee4"
             ["inreview"]="df73e18b"
             ["review"]="df73e18b"
             ["done"]="98236657"
