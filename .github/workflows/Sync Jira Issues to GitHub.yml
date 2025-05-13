@@ -70,7 +70,8 @@ jobs:
             ["In Review"]="Todo"
             ["inreview"]="df73e18b"
             ["review"]="df73e18b"
-            ["done"]="98236657"
+            ["done"]="Done"
+            ["Done"]="Done"
             ["closed"]="98236657"
             ["resolved"]="98236657"
           )
