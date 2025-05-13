@@ -29,14 +29,14 @@ jobs:
             id: .id,
             key: .key,
             title: .fields.summary,
-            body: .fields.description,
-            due_date: .fields.duedate,
-            input: .fields.customfield_10039,
-            output: .fields.customfield_10040,
-            priority: .fields.priority.name,
+            body: (.fields.description // "No Description"),
+            due_date: (.fields.duedate // "No Due Date"),
+            input: (.fields.customfield_10039 // "No Input"),
+            output: (.fields.customfield_10040 // "No Output"),
+            priority: (.fields.priority.name // "No Priority"),
             team: (.fields.team.name // "No Team"),
-            status: .fields.status.name,
-            assignee: (.fields.assignee.emailAddress // empty)
+            status: (.fields.status.name // "No Status"),
+            assignee: (.fields.assignee.emailAddress // "Unassigned")
           }]' > jira_issues.json
 
       - name: Debug Jira JSON Content
