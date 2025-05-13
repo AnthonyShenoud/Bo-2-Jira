@@ -138,6 +138,19 @@ jobs:
             echo "📦 Added to GitHub Project. Item ID: $item_id"
 
             # Update the status field in the GitHub project
+            set_status: updateProjectV2ItemFieldValue(input: {
+                projectId: $project
+                itemId: $item
+                fieldId: $status_field
+                value: {
+                  singleSelectOptionId: $status_value
+                  }
+              }) {
+                projectV2Item {
+                  id
+                  }
+              }
+            
             status_option_id="${STATUS_MAP[$status]}"
             if [[ -z "$status_option_id" ]]; then
               echo "⚠️ No valid status mapping for '$status'. Skipping status update."
@@ -155,7 +168,7 @@ jobs:
               -f input.projectId="$PROJECT_ID" \
               -f input.itemId="$item_id" \
               -f input.fieldId="$STATUS_FIELD_ID" \
-              -f input.value.singleSelectOptionId="$status_option_id" || {
+              -f input.value.singleSelectOptionId="$STATUS_FIELD_ID -f status_value=${{ env.TODO_OPTION_ID }}" || {
                 echo "⚠️ Failed to update status for item $item_id. Skipping."
                 continue
               }
