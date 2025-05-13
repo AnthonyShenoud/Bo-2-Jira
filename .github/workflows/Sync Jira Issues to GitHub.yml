@@ -45,7 +45,7 @@ jobs:
             priority: (.fields.priority.name // "No Priority"),
             team: (.fields.team.name // "No Team"),
             status: (.fields.status.name // "No Status"),
-            assignee: (.fields.assignee.emailAddress // "Unassigned")
+            assignee: (.fields.assignee // "Unassigned")
           }]' > jira_issues.json
 
       - name: Debug Jira JSON Content
