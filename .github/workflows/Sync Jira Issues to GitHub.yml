@@ -67,9 +67,9 @@ jobs:
           )
 
           declare -A USER_MAP=(
-            ["anthony.ashenouda@gmail.com"]="AnthonyShenoud"
-            ["tintin.shenouda@example.com"]="TintinShenouda"
-            ["maria.campagnolo@example.com"]="MariaCampagnolo"
+            ["Anthony Shenouda"]="AnthonyShenoud"
+            ["Tintin Shenouda"]="TintinShenouda"
+            ["Maria Campagnolo"]="MariaCampagnolo"
           )
 
           jq -c '.[]' jira_issues.json | while read -r issue; do
