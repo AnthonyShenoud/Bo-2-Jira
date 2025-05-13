@@ -11,6 +11,17 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      - name: Install jq and GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq gh
+
+      - name: Authenticate GitHub CLI
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+        run: |
+          echo "$GH_PERSONAL_ACCESS_TOKEN" | gh auth login --with-token
+
       - name: Fetch Jira Issues
         env:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
@@ -57,8 +68,8 @@ jobs:
 
           declare -A USER_MAP=(
             ["anthony.ashenouda@gmail.com"]="AnthonyShenoud"
-            ["anthony.ashenouda1@gmail.com"]="TintinShenouda"
-            ["mariacampagnolo2001@gmail.com"]="MariaCampagnolo"
+            ["tintin.shenouda@example.com"]="TintinShenouda"
+            ["maria.campagnolo@example.com"]="MariaCampagnolo"
           )
 
           jq -c '.[]' jira_issues.json | while read -r issue; do
@@ -81,15 +92,17 @@ jobs:
 
             echo "Creating issue for: $jira_key ($title)"
 
+            issue_payload=$(jq -n \
+              --arg title "$title" \
+              --arg body "### Jira: $jira_key\n\n**Description**: $body\n\n**Due**: $due_date\n**Input**: $input\n**Output**: $output\n**Team**: $team\n**Priority**: $priority" \
+              --argjson assignees "$assignees_json" \
+              '{title: $title, body: $body, assignees: $assignees}')
+
             issue_response=$(curl -s -X POST \
               -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               https://api.github.com/repos/$REPO/issues \
-              -d "{
-                \"title\": \"$title\",
-                \"body\": \"### Jira: $jira_key\\n\\n**Description**: $body\\n\\n**Due**: $due_date\\n**Input**: $input\\n**Output**: $output\\n**Team**: $team\\n**Priority**: $priority\",
-                \"assignees\": $assignees_json
-              }")
+              -d "$issue_payload")
 
             echo "GitHub API response: $issue_response"
 
@@ -112,17 +125,11 @@ jobs:
 
             echo "📦 Added to project. Item ID: $item_id"
 
-            # Update status
             status_option_id="${STATUS_MAP[$status]}"
             if [[ -z "$status_option_id" ]]; then
               echo "⚠️ No valid status mapping for '$status'. Skipping status update."
               continue
             fi
-
-            echo "PROJECT_ID: $PROJECT_ID"
-            echo "item_id: $item_id"
-            echo "STATUS_FIELD_ID: $STATUS_FIELD_ID"
-            echo "status_option_id: $status_option_id"
 
             gh api graphql --silent -f query='
               mutation($input: UpdateProjectV2ItemFieldValueInput!) {
