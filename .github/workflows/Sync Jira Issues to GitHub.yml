@@ -68,7 +68,7 @@ jobs:
 
           declare -A USER_MAP=(
             ["anthony.ashenouda@gmail.com"]="AnthonyShenoud"
-            ["tintin@example.com"]="TintinShenouda"
+            ["712020:b41cbe18-4f26-468d-a2c0-8a4331eef3a1"]="TintinShenouda"
             ["maria@example.com"]="MariaCampagnolo"
           )
 
