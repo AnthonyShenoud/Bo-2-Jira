@@ -1,0 +1,102 @@
+name: Sync GitHub Issues to Jira
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled]
+  issue_comment:
+    types: [created]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    env:
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_BASE_URL: "https://yourcompany.atlassian.net"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Sync GitHub Issue to Jira
+        run: |
+          issue_number=${{ github.event.issue.number }}
+          issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
+          issue_body=$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")
+          labels=$(jq -r '[.issue.labels[].name] | join(",")' "$GITHUB_EVENT_PATH")
+
+          # Extract Jira key (e.g., WF-123) from title using regex
+          if [[ "$issue_title" =~ ([A-Z]+-[0-9]+) ]]; then
+            jira_key="${BASH_REMATCH[1]}"
+          else
+            echo "❌ No Jira issue key found in title."
+            exit 0
+          fi
+
+          echo "🔗 Syncing to Jira issue: $jira_key"
+
+          # Update Jira issue title and description
+          payload=$(jq -n \
+            --arg summary "$issue_title" \
+            --arg desc "$issue_body" \
+            '{ fields: { summary: $summary, description: $desc } }')
+
+          curl -s -X PUT \
+            -H "Authorization: Basic $(echo -n "$JIRA_EMAIL:$JIRA_API_TOKEN" | base64)" \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            "$JIRA_BASE_URL/rest/api/3/issue/$jira_key"
+
+          echo "✅ Jira issue updated."
+
+          # Transition issue based on GitHub labels
+          transition_id=""
+          if [[ "$labels" == *"done"* ]]; then
+            transition_id=31
+          elif [[ "$labels" == *"inprogress"* ]]; then
+            transition_id=21
+          elif [[ "$labels" == *"inreview"* ]]; then
+            transition_id=2
+          elif [[ "$labels" == *"todo"* ]]; then
+            transition_id=11
+          elif [[ "$labels" == *"backlog"* ]]; then
+            transition_id=3
+          fi
+
+          if [[ -n "$transition_id" ]]; then
+            echo "🔄 Transitioning Jira issue $jira_key to ID $transition_id..."
+            curl -s -X POST \
+              -H "Authorization: Basic $(echo -n "$JIRA_EMAIL:$JIRA_API_TOKEN" | base64)" \
+              -H "Content-Type: application/json" \
+              --data "{ \"transition\": { \"id\": \"$transition_id\" } }" \
+              "$JIRA_BASE_URL/rest/api/3/issue/$jira_key/transitions"
+            echo "✅ Transition applied."
+          fi
+
+      - name: Mirror GitHub Comments to Jira
+        if: github.event_name == 'issue_comment'
+        run: |
+          issue_number=${{ github.event.issue.number }}
+          comment_body=$(jq -r '.comment.body' "$GITHUB_EVENT_PATH")
+          comment_author=$(jq -r '.comment.user.login' "$GITHUB_EVENT_PATH")
+          comment_created=$(jq -r '.comment.created_at' "$GITHUB_EVENT_PATH")
+
+          # Extract Jira key from GitHub issue title
+          issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
+          if [[ "$issue_title" =~ ([A-Z]+-[0-9]+) ]]; then
+            jira_key="${BASH_REMATCH[1]}"
+          else
+            echo "❌ No Jira issue key found in title."
+            exit 0
+          fi
+
+          comment_payload=$(jq -n --arg body "*Comment from GitHub user [$comment_author] at $comment_created:*\n\n$comment_body" '{ body: $body }')
+
+          echo "💬 Posting comment to Jira issue $jira_key..."
+          curl -s -X POST \
+            -H "Authorization: Basic $(echo -n "$JIRA_EMAIL:$JIRA_API_TOKEN" | base64)" \
+            -H "Content-Type: application/json" \
+            --data "$comment_payload" \
+            "$JIRA_BASE_URL/rest/api/3/issue/$jira_key/comment"
+          echo "✅ Comment synced."
