@@ -33,7 +33,6 @@ jobs:
           response=$(curl -s -X GET -u "$JIRA_USER:$JIRA_API_TOKEN" \
             -H "Accept: application/json" \
             "https://$JIRA_DOMAIN/rest/api/2/search?jql=project=$JIRA_PROJECT_KEY")
-
           echo "$response" | jq '[.issues[] | {
             id: .id,
             key: .key,
@@ -79,8 +78,8 @@ jobs:
 
           jq -c '.[]' jira_issues.json | while read -r issue; do
             title=$(echo "$issue" | jq -r '.title')
-            body=$(echo "$issue" | jq -r '.body')
             jira_key=$(echo "$issue" | jq -r '.key')
+            body=$(echo "$issue" | jq -r '.body')
             due_date=$(echo "$issue" | jq -r '.due_date')
             input=$(echo "$issue" | jq -r '.input')
             output=$(echo "$issue" | jq -r '.output')
@@ -88,19 +87,21 @@ jobs:
             priority=$(echo "$issue" | jq -r '.priority')
             status=$(echo "$issue" | jq -r '.status' | tr '[:upper:]' '[:lower:]' | tr -d ' ')
             assignee=$(echo "$issue" | jq -r '.assignee')
-
             github_username="${USER_MAP[$assignee]}"
+
+            # Set GitHub assignees
             assignees_json="[]"
             if [[ -n "$github_username" ]]; then
               assignees_json=$(jq -n --arg u "$github_username" '[ $u ]')
             fi
 
-            echo "🔍 Jira assignee account ID: $assignee"
-            echo "🔗 Mapped GitHub username: $github_username"
-            echo "Creating GitHub issue for: $jira_key ($title)"
+            # GitHub issue title includes Jira key
+            github_title="[$jira_key] $title"
+
+            echo "Creating GitHub issue for: $github_title"
 
             issue_payload=$(jq -n \
-              --arg title "$title" \
+              --arg title "$github_title" \
               --arg body "### Jira: $jira_key\n\n**Description**: $body\n\n**Due**: $due_date\n**Input**: $input\n**Output**: $output\n**Team**: $team\n**Priority**: $priority" \
               --argjson assignees "$assignees_json" \
               '{title: $title, body: $body, assignees: $assignees}')
@@ -110,8 +111,6 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               https://api.github.com/repos/$REPO/issues \
               -d "$issue_payload")
-
-            echo "GitHub API response: $issue_response"
 
             issue_node_id=$(echo "$issue_response" | jq -r '.node_id')
             issue_url=$(echo "$issue_response" | jq -r '.html_url')
@@ -130,9 +129,6 @@ jobs:
                 }
               }' -F projectId="$PROJECT_ID" -F contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
 
-            echo "📦 Added to GitHub Project. Item ID: $item_id"
-
-            # Update the status field using the official GitHub documentation format
             status_option_id="${STATUS_MAP[$status]}"
             if [[ -z "$status_option_id" ]]; then
               echo "⚠️ No valid status mapping for '$status'. Skipping status update."
