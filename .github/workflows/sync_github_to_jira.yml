@@ -11,9 +11,10 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-      JIRA_BASE_URL: "https://yourcompany.atlassian.net"
+      JIRA_DOMAIN: "anthonyashenouda.atlassian.net"
+      JIRA_PROJECT_KEY: "SCRUM"
+      JIRA_USER: "anthony.ashenouda@gmail.com"
 
     steps:
       - name: Checkout
@@ -26,7 +27,7 @@ jobs:
           issue_body=$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")
           labels=$(jq -r '[.issue.labels[].name] | join(",")' "$GITHUB_EVENT_PATH")
 
-          # Extract Jira key (e.g., WF-123) from title using regex
+          # Extract Jira key (e.g., SCRUM-123) from title using regex
           if [[ "$issue_title" =~ ([A-Z]+-[0-9]+) ]]; then
             jira_key="${BASH_REMATCH[1]}"
           else
@@ -43,10 +44,10 @@ jobs:
             '{ fields: { summary: $summary, description: $desc } }')
 
           curl -s -X PUT \
-            -H "Authorization: Basic $(echo -n "$JIRA_EMAIL:$JIRA_API_TOKEN" | base64)" \
+            -H "Authorization: Basic $(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)" \
             -H "Content-Type: application/json" \
             --data "$payload" \
-            "$JIRA_BASE_URL/rest/api/3/issue/$jira_key"
+            "https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key"
 
           echo "✅ Jira issue updated."
 
@@ -67,10 +68,10 @@ jobs:
           if [[ -n "$transition_id" ]]; then
             echo "🔄 Transitioning Jira issue $jira_key to ID $transition_id..."
             curl -s -X POST \
-              -H "Authorization: Basic $(echo -n "$JIRA_EMAIL:$JIRA_API_TOKEN" | base64)" \
+              -H "Authorization: Basic $(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)" \
               -H "Content-Type: application/json" \
               --data "{ \"transition\": { \"id\": \"$transition_id\" } }" \
-              "$JIRA_BASE_URL/rest/api/3/issue/$jira_key/transitions"
+              "https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key/transitions"
             echo "✅ Transition applied."
           fi
 
@@ -95,8 +96,8 @@ jobs:
 
           echo "💬 Posting comment to Jira issue $jira_key..."
           curl -s -X POST \
-            -H "Authorization: Basic $(echo -n "$JIRA_EMAIL:$JIRA_API_TOKEN" | base64)" \
+            -H "Authorization: Basic $(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)" \
             -H "Content-Type: application/json" \
             --data "$comment_payload" \
-            "$JIRA_BASE_URL/rest/api/3/issue/$jira_key/comment"
+            "https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key/comment"
           echo "✅ Comment synced."
