@@ -56,7 +56,7 @@ jobs:
           
           # Send PUT request and capture HTTP status
           response=$(curl -s -w "%{http_code}" -o response.json -X PUT \
-            -H "Authorization: Basic $(echo -n "$JIRA_EMAIL:$JIRA_API_TOKEN" | base64)" \
+            -H "Authorization: Basic $(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)" \
             -H "Content-Type: application/json" \
             --data "$payload" \
             "$JIRA_BASE_URL/rest/api/3/issue/$jira_key")
