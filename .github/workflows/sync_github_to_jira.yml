@@ -43,11 +43,30 @@ jobs:
             --arg desc "$issue_body" \
             '{ fields: { summary: $summary, description: $desc } }')
 
-          curl -s -X PUT \
-            -H "Authorization: Basic $(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)" \
+          # Print payload for debugging
+          echo "Payload: $payload"
+          
+          # Send PUT request and capture HTTP status
+          response=$(curl -s -w "%{http_code}" -o response.json -X PUT \
+            -H "Authorization: Basic $(echo -n "$JIRA_EMAIL:$JIRA_API_TOKEN" | base64)" \
             -H "Content-Type: application/json" \
             --data "$payload" \
-            "https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key"
+            "$JIRA_BASE_URL/rest/api/3/issue/$jira_key")
+          
+          # Print response and HTTP status
+          echo "Jira Response:"
+          cat response.json
+          echo ""
+          echo "HTTP status: $response"
+          
+          # Fail the step if status code is 400 or higher
+          if [[ "$response" -ge 400 ]]; then
+            echo "❌ Failed to update Jira issue $jira_key. Status code: $response"
+            exit 43
+          else
+            echo "✅ Jira issue updated successfully."
+          fi
+
 
           echo "✅ Jira issue updated."
 
