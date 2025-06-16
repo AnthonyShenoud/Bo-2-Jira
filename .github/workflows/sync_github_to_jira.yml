@@ -3,20 +3,17 @@ name: Sync GitHub Issue to Jira
 on:
   issues:
     types: [opened, edited, labeled]
-  issue_comment:
-    types: [created]
 
 jobs:
   sync-to-jira:
     runs-on: ubuntu-latest
-    env:
-      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-      JIRA_DOMAIN: anthonyashenouda.atlassian.net
-      JIRA_PROJECT_KEY: SCRUM
-      JIRA_USER: anthony.ashenouda@gmail.com
-
     steps:
-      - name: Sync GitHub Issue to Jira
+      - name: 📦 Read GitHub issue data and sync with Jira
+        env:
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_DOMAIN: anthonyashenouda.atlassian.net
+          JIRA_PROJECT_KEY: SCRUM
+          JIRA_USER: anthony.ashenouda@gmail.com
         run: |
           echo "📦 Reading GitHub issue data..."
 
@@ -37,27 +34,31 @@ jobs:
             exit 0
           fi
 
-          # Construct URL and headers
+          # Construct URL and auth
           JIRA_BASE_URL="https://$JIRA_DOMAIN"
           jira_url="$JIRA_BASE_URL/rest/api/3/issue/$jira_key"
-
-          echo "🌐 Jira Base URL: $JIRA_BASE_URL"
-          echo "🌐 Jira API URL: $jira_url"
           auth_header=$(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)
-          echo "🔐 Encoded Auth Header: $auth_header"
 
-          # Prepare payload
-          payload=$(jq -n \
-            --arg summary "$issue_title" \
-            --arg desc "$issue_body" \
-            '{ fields: { summary: $summary, description: $desc } }')
+          echo "🌐 Jira URL: $jira_url"
+          echo "🔐 Encoded Auth Header created."
+
+          # Safely create JSON payload
+          payload=$(cat <<EOF
+{
+  "fields": {
+    "summary": $(jq -Rs <<< "$issue_title"),
+    "description": $(jq -Rs <<< "$issue_body")
+  }
+}
+EOF
+)
 
           echo "📤 Payload to send:"
           echo "$payload"
 
-          # Send PUT request to update Jira issue (verbose and debug-friendly)
-          echo "📡 Sending request to Jira..."
-          response=$(curl -v -w "%{http_code}" -o response.json -X PUT \
+          # Send PUT request to update Jira issue
+          echo "📡 Sending update to Jira..."
+          response=$(curl -s -w "%{http_code}" -o response.json -X PUT \
             -H "Authorization: Basic $auth_header" \
             -H "Content-Type: application/json" \
             --data "$payload" \
@@ -91,7 +92,7 @@ jobs:
 
           if [[ -n "$transition_id" ]]; then
             echo "🔄 Transitioning Jira issue $jira_key to ID $transition_id..."
-            curl -v -X POST \
+            curl -s -X POST \
               -H "Authorization: Basic $auth_header" \
               -H "Content-Type: application/json" \
               --data "{ \"transition\": { \"id\": \"$transition_id\" } }" \
