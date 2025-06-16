@@ -3,6 +3,8 @@ name: Sync GitHub Issue to Jira
 on:
   issues:
     types: [opened, edited, labeled]
+  issue_comment:
+    types: [created]
 
 jobs:
   sync-to-jira:
