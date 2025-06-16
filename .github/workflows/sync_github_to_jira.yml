@@ -1,4 +1,4 @@
-name: Sync GitHub Issue to Jira
+name: Sync GitHub Issues to Jira
 
 on:
   issues:
@@ -7,21 +7,36 @@ on:
     types: [created]
 
 jobs:
-  sync-to-jira:
+  sync:
     runs-on: ubuntu-latest
     steps:
-      - name: 📦 Read GitHub issue data and sync with Jira
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sync GitHub issue/comment to Jira
         env:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_USER: ${{ secrets.JIRA_USER }}
           JIRA_DOMAIN: anthonyashenouda.atlassian.net
-          JIRA_PROJECT_KEY: SCRUM
-          JIRA_USER: anthony.ashenouda@gmail.com
         run: |
           echo "📦 Reading GitHub issue data..."
 
-          issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
-          issue_body=$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")
-          labels=$(jq -r '[.issue.labels[].name] | join(",")' "$GITHUB_EVENT_PATH")
+          if [[ -f "$GITHUB_EVENT_PATH" ]]; then
+            event_type=$(jq -r '.comment | if . == null then "issue" else "comment" end' "$GITHUB_EVENT_PATH")
+          else
+            echo "❌ GITHUB_EVENT_PATH not found."
+            exit 1
+          fi
+
+          if [[ "$event_type" == "comment" ]]; then
+            issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
+            issue_body=$(jq -r '.comment.body' "$GITHUB_EVENT_PATH")
+            labels=""  # Labels not provided in comment events
+          else
+            issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
+            issue_body=$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")
+            labels=$(jq -r '[.issue.labels[].name] | join(",")' "$GITHUB_EVENT_PATH")
+          fi
 
           echo "📌 Issue Title: $issue_title"
           echo "📌 Issue Body: $issue_body"
@@ -37,38 +52,38 @@ jobs:
 
           JIRA_BASE_URL="https://$JIRA_DOMAIN"
           jira_url="$JIRA_BASE_URL/rest/api/3/issue/$jira_key"
-          auth_header=$(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)
-
           echo "🌐 Jira URL: $jira_url"
+
+          auth_header=$(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)
           echo "🔐 Encoded Auth Header created."
 
-          payload="$(jq -n \
+          payload=$(jq -n \
             --arg summary "$issue_title" \
             --arg desc "$issue_body" \
-            '{fields: {summary: $summary, description: $desc}}')"
+            '{ fields: { summary: $summary, description: $desc } }')
 
           echo "📤 Payload to send:"
           echo "$payload"
 
           echo "📡 Sending update to Jira..."
-          response=$(curl -s -w "%{http_code}" -o response.json -X PUT \
+          http_status=$(curl -s -w "%{http_code}" -o response.json -X PUT \
             -H "Authorization: Basic $auth_header" \
             -H "Content-Type: application/json" \
             --data "$payload" \
             "$jira_url")
 
-          echo ""
-          echo "📨 Jira Response JSON:"
+          echo "📥 HTTP Status: $http_status"
+          echo "📨 Jira Response:"
           cat response.json || echo "(empty)"
-          echo "📥 HTTP Status Code: $response"
 
-          if [[ "$response" -ge 400 || -z "$response" ]]; then
-            echo "❌ Failed to update Jira issue $jira_key. Status code: $response"
+          if [[ "$http_status" -ge 400 ]]; then
+            echo "❌ Jira update failed with HTTP status $http_status"
             exit 43
           else
             echo "✅ Jira issue updated successfully."
           fi
 
+          # Transition handling (optional, if labels are available)
           transition_id=""
           if [[ "$labels" == *"done"* ]]; then
             transition_id=31
