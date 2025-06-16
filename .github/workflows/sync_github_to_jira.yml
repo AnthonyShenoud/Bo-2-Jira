@@ -19,7 +19,7 @@ jobs:
           JIRA_USER: ${{ secrets.JIRA_USER }}
           JIRA_DOMAIN: anthonyashenouda.atlassian.net
         run: |
-          echo "📦 Reading GitHub issue data..."
+          echo "📦 Reading GitHub event..."
 
           if [[ -f "$GITHUB_EVENT_PATH" ]]; then
             event_type=$(jq -r '.comment | if . == null then "issue" else "comment" end' "$GITHUB_EVENT_PATH")
@@ -28,19 +28,51 @@ jobs:
             exit 1
           fi
 
+          JIRA_BASE_URL="https://$JIRA_DOMAIN"
+          auth_header=$(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)
+
           if [[ "$event_type" == "comment" ]]; then
             issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
-            issue_body=$(jq -r '.comment.body' "$GITHUB_EVENT_PATH")
-            labels=""  # Labels not provided in comment events
-          else
-            issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
-            issue_body=$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")
-            labels=$(jq -r '[.issue.labels[].name] | join(",")' "$GITHUB_EVENT_PATH")
+            comment_body=$(jq -r '.comment.body' "$GITHUB_EVENT_PATH")
+            echo "📌 Issue Title: $issue_title"
+            echo "💬 Comment Body: $comment_body"
+
+            if [[ "$issue_title" =~ ([A-Z]+-[0-9]+) ]]; then
+              jira_key="${BASH_REMATCH[1]}"
+              echo "🔗 Found Jira key: $jira_key"
+            else
+              echo "❌ No Jira issue key found in title."
+              exit 0
+            fi
+
+            echo "💬 Posting comment to Jira..."
+            http_status=$(curl -s -w "%{http_code}" -o response.json -X POST \
+              -H "Authorization: Basic $auth_header" \
+              -H "Content-Type: application/json" \
+              --data "{ \"body\": \"$comment_body\" }" \
+              "$JIRA_BASE_URL/rest/api/3/issue/$jira_key/comment")
+
+            echo "📥 HTTP Status: $http_status"
+            cat response.json || echo "(empty)"
+
+            if [[ "$http_status" -ge 400 ]]; then
+              echo "❌ Failed to post Jira comment. Status code: $http_status"
+              exit 43
+            else
+              echo "✅ Comment added to Jira issue."
+            fi
+
+            exit 0
           fi
+
+          # If we're here, it's an issue event
+          issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
+          issue_body=$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")
+          labels=$(jq -r '[.issue.labels[].name] | join(",")' "$GITHUB_EVENT_PATH")
 
           echo "📌 Issue Title: $issue_title"
           echo "📌 Issue Body: $issue_body"
-          echo "📌 Labels: $labels"
+          echo "🏷️ Labels: $labels"
 
           if [[ "$issue_title" =~ ([A-Z]+-[0-9]+) ]]; then
             jira_key="${BASH_REMATCH[1]}"
@@ -50,30 +82,20 @@ jobs:
             exit 0
           fi
 
-          JIRA_BASE_URL="https://$JIRA_DOMAIN"
           jira_url="$JIRA_BASE_URL/rest/api/3/issue/$jira_key"
-          echo "🌐 Jira URL: $jira_url"
-
-          auth_header=$(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)
-          echo "🔐 Encoded Auth Header created."
-
           payload=$(jq -n \
             --arg summary "$issue_title" \
             --arg desc "$issue_body" \
             '{ fields: { summary: $summary, description: $desc } }')
 
-          echo "📤 Payload to send:"
-          echo "$payload"
-
-          echo "📡 Sending update to Jira..."
-          http_status=$(curl -s -w "%{http_code}" -o response.json -X POST \
+          echo "📤 Updating Jira issue fields..."
+          http_status=$(curl -s -w "%{http_code}" -o response.json -X PUT \
             -H "Authorization: Basic $auth_header" \
             -H "Content-Type: application/json" \
             --data "$payload" \
             "$jira_url")
 
           echo "📥 HTTP Status: $http_status"
-          echo "📨 Jira Response:"
           cat response.json || echo "(empty)"
 
           if [[ "$http_status" -ge 400 ]]; then
@@ -83,7 +105,7 @@ jobs:
             echo "✅ Jira issue updated successfully."
           fi
 
-          # Transition handling (optional, if labels are available)
+          # Optional transitions
           transition_id=""
           if [[ "$labels" == *"done"* ]]; then
             transition_id=31
