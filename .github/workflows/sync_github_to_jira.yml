@@ -25,7 +25,6 @@ jobs:
           echo "📌 Issue Body: $issue_body"
           echo "📌 Labels: $labels"
 
-          # Extract Jira key from issue title (e.g., SCRUM-123)
           if [[ "$issue_title" =~ ([A-Z]+-[0-9]+) ]]; then
             jira_key="${BASH_REMATCH[1]}"
             echo "🔗 Found Jira key: $jira_key"
@@ -34,7 +33,6 @@ jobs:
             exit 0
           fi
 
-          # Construct URL and auth
           JIRA_BASE_URL="https://$JIRA_DOMAIN"
           jira_url="$JIRA_BASE_URL/rest/api/3/issue/$jira_key"
           auth_header=$(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)
@@ -42,21 +40,14 @@ jobs:
           echo "🌐 Jira URL: $jira_url"
           echo "🔐 Encoded Auth Header created."
 
-          # Safely create JSON payload
-          payload=$(cat <<EOF
-{
-  "fields": {
-    "summary": $(jq -Rs <<< "$issue_title"),
-    "description": $(jq -Rs <<< "$issue_body")
-  }
-}
-EOF
-)
+          payload="$(jq -n \
+            --arg summary "$issue_title" \
+            --arg desc "$issue_body" \
+            '{fields: {summary: $summary, description: $desc}}')"
 
           echo "📤 Payload to send:"
           echo "$payload"
 
-          # Send PUT request to update Jira issue
           echo "📡 Sending update to Jira..."
           response=$(curl -s -w "%{http_code}" -o response.json -X PUT \
             -H "Authorization: Basic $auth_header" \
@@ -76,7 +67,6 @@ EOF
             echo "✅ Jira issue updated successfully."
           fi
 
-          # Transition issue based on labels
           transition_id=""
           if [[ "$labels" == *"done"* ]]; then
             transition_id=31
