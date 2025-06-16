@@ -68,7 +68,11 @@ jobs:
             -H "Authorization: Basic $auth_header" \
             -H "Content-Type: application/json" \
             --data "$payload" \
-            "$jira_url")
+            -v \
+            "$jira_url" 2> curl_debug.log)
+
+          echo "📢 Curl verbose log:"
+          cat curl_debug.log
 
           echo "📥 HTTP Status: $http_status"
           echo "📨 Jira Response:"
