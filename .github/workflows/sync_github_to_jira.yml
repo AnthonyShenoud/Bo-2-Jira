@@ -57,8 +57,25 @@ jobs:
           echo "🔐 Encoded Auth Header created."
 
           payload=$(jq -n \
-            --arg body "$issue_body" \
-            '{ body: $body }')
+            --arg text "$issue_body" \
+            '{
+              body: {
+                type: "doc",
+                version: 1,
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [
+                      {
+                        type: "text",
+                        text: $text
+                      }
+                    ]
+                  }
+                ]
+              }
+            }')
+
 
           echo "📤 Payload to send:"
           echo "$payload"
