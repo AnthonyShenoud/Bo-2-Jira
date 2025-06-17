@@ -15,8 +15,8 @@ jobs:
 
       - name: Sync GitHub issue/comment to Jira
         env:
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_USER: ${{ secrets.JIRA_USER }}
+          JIRA_API_TOKEN: ATATT3xFfGF0o_Ez0LhlMLt7qDpyBLPD3NoTGPqYnCA7I6jnDYkfpuBGoCgMekcOSjJJ1pAhqHGv4GGGTyMEMewkcQwpyH3Z5ZdGGcUC9hwUnTdPOKvYNQPeEoRAY5VGR64j8gu4leBe0PPKM-tZ2t1FWBIvVNZrnjCllsCqRCqf9l4WcCr4nu4=02CCE1CD
+          JIRA_USER: anthony.ashenouda@gmail.com
           JIRA_DOMAIN: anthonyashenouda.atlassian.net
         run: |
           echo "📦 Reading GitHub event..."
@@ -52,7 +52,8 @@ jobs:
           jira_url="$JIRA_BASE_URL/rest/api/3/issue/$jira_key/comment"
           echo "🌐 Jira URL: $jira_url"
 
-          auth_header=$(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)
+          auth_header=$(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64 | tr -d '\n')
+
           echo "🔐 Encoded Auth Header created."
 
           payload=$(jq -n \
