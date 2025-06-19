@@ -109,7 +109,7 @@ jobs:
 
             issue_payload=$(jq -n \
               --arg title "$github_title" \
-              --arg body "### Jira: $jira_key\n\n**Description**: $body\n\n**Due**: $due_date\n**Input**: $input\n**Output**: $output\n**Team**: $team\n**Priority**: $priority" \
+              --arg body "🔗 Jira issue: https://$JIRA_DOMAIN/browse/$jira_key\n\n### Jira: $jira_key\n\n**Description**: $body\n\n**Due**: $due_date\n**Input**: $input\n**Output**: $output\n**Team**: $team\n**Priority**: $priority"
               --argjson assignees "$assignees_json" \
               '{title: $title, body: $body, assignees: $assignees}')
 
