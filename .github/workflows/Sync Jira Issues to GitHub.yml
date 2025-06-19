@@ -98,6 +98,13 @@ jobs:
             # GitHub issue title includes Jira key
             github_title="[$jira_key] $title"
 
+            existing_issue=$(gh issue list --repo "$REPO" --search "$jira_key" --state "all" --json number,title | jq -r ".[] | select(.title | contains(\"[$jira_key]\")) | .number")
+
+            if [[ -n "$existing_issue" ]]; then
+              echo "⚠️ Issue [$jira_key] already exists in GitHub as #$existing_issue. Skipping creation."
+              continue
+            fi
+
             echo "Creating GitHub issue for: $github_title"
 
             issue_payload=$(jq -n \
