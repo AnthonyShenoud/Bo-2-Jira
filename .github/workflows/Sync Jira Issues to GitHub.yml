@@ -121,6 +121,44 @@ jobs:
 
             issue_node_id=$(echo "$issue_response" | jq -r '.node_id')
             issue_url=$(echo "$issue_response" | jq -r '.html_url')
+            
+            if [[ "$issue_node_id" == "null" || -z "$issue_node_id" ]]; then
+              echo "⚠️ Failed to create GitHub issue for $jira_key"
+              continue
+            fi
+            
+            echo "✅ Created GitHub issue: $issue_url"
+            
+            # ➕ Add comment to Jira with backlink to GitHub issue
+            jira_comment_url="https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key/comment"
+            jira_payload=$(jq -n \
+              --arg text "🔗 Linked GitHub issue: $issue_url" \
+              '{
+                body: {
+                  type: "doc",
+                  version: 1,
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [
+                        {
+                          type: "text",
+                          text: $text
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }')
+            
+            curl -s -X POST \
+              -H "Authorization: Basic $(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64)" \
+              -H "Content-Type: application/json" \
+              --data "$jira_payload" \
+              "$jira_comment_url"
+            
+            echo "🧷 Jira issue $jira_key linked back to GitHub"
+
 
             if [[ "$issue_node_id" == "null" || -z "$issue_node_id" ]]; then
               echo "⚠️ Failed to create GitHub issue for $jira_key"
