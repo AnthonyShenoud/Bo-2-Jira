@@ -23,24 +23,17 @@ jobs:
         run: |
           echo "📦 Reading GitHub event..."
 
-          if [[ -f "$GITHUB_EVENT_PATH" ]]; then
-            event_type=$(jq -r '.comment | if . == null then "issue" else "comment" end' "$GITHUB_EVENT_PATH")
-          else
+          if [[ ! -f "$GITHUB_EVENT_PATH" ]]; then
             echo "❌ GITHUB_EVENT_PATH not found."
             exit 1
           fi
 
-          if [[ "$event_type" == "comment" ]]; then
-            issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
-            issue_body=$(jq -r '.comment.body' "$GITHUB_EVENT_PATH")
-            echo "📌 Issue Title: $issue_title"
-            echo "💬 Comment Body: $issue_body"
-          else
-            issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
-            issue_body=$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")
-            echo "📌 Issue Title: $issue_title"
-            echo "📌 Issue Body: $issue_body"
-          fi
+          # Extract issue and comment info
+          issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
+          comment_body=$(jq -r '.comment.body // empty' "$GITHUB_EVENT_PATH")
+
+          echo "📌 Issue Title: $issue_title"
+          echo "💬 Comment Body: $comment_body"
 
           if [[ "$issue_title" =~ ([A-Z]+-[0-9]+) ]]; then
             jira_key="${BASH_REMATCH[1]}"
@@ -51,15 +44,47 @@ jobs:
           fi
 
           JIRA_BASE_URL="https://$JIRA_DOMAIN"
-          jira_url="$JIRA_BASE_URL/rest/api/3/issue/$jira_key/comment"
-          echo "🌐 Jira URL: $jira_url"
-
           auth_header=$(echo -n "$JIRA_USER:$JIRA_API_TOKEN" | base64 | tr -d '\n')
 
-          echo "🔐 Encoded Auth Header created."
+          ##############################
+          # 🧠 Check for /status command
+          ##############################
 
+          if [[ "$comment_body" =~ ^/status[[:space:]]+([a-zA-Z]+)$ ]]; then
+            status_command="${BASH_REMATCH[1],,}"  # lowercase
+
+            echo "🪄 Detected /status command: $status_command"
+
+            # Map to Jira transition ID
+            case "$status_command" in
+              done) transition_id=31 ;;
+              inreview) transition_id=2 ;;
+              inprogress) transition_id=21 ;;
+              ready) transition_id=11 ;;
+              backlog) transition_id=3 ;;
+              *)
+                echo "❌ Invalid status: $status_command"
+                exit 0
+                ;;
+            esac
+
+            echo "🔁 Applying Jira transition $transition_id for $jira_key"
+            curl -s -X POST \
+              -H "Authorization: Basic $auth_header" \
+              -H "Content-Type: application/json" \
+              --data "{ \"transition\": { \"id\": \"$transition_id\" } }" \
+              "$JIRA_BASE_URL/rest/api/3/issue/$jira_key/transitions"
+
+            echo "✅ Transition complete."
+            exit 0
+          fi
+
+          echo "ℹ️ No /status command. Proceeding with default sync."
+
+          # Fallback: Post comment to Jira (as before)
+          comment_text="${comment_body:-$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")}"
           payload=$(jq -n \
-            --arg text "$issue_body" \
+            --arg text "$comment_text" \
             '{
               body: {
                 type: "doc",
@@ -78,31 +103,22 @@ jobs:
               }
             }')
 
-
-          echo "📤 Payload to send:"
-          echo "$payload"
-
-          echo "💬 Posting comment to Jira..."
-          response_file="response.json"
-          http_status=$(curl -s -w "%{http_code}" -o "$response_file" -X POST \
+          jira_url="$JIRA_BASE_URL/rest/api/3/issue/$jira_key/comment"
+          echo "📤 Posting to Jira: $jira_url"
+          http_status=$(curl -s -w "%{http_code}" -o response.json -X POST \
             -H "Authorization: Basic $auth_header" \
             -H "Content-Type: application/json" \
             --data "$payload" \
-            -v \
-            "$jira_url" 2> curl_debug.log)
-
-          echo "📢 Curl verbose log:"
-          cat curl_debug.log
+            "$jira_url")
 
           echo "📥 HTTP Status: $http_status"
-          echo "📨 Jira Response:"
-          cat "$response_file" || echo "(empty)"
+          cat response.json || echo "(empty)"
 
           if [[ "$http_status" -ge 400 ]]; then
-            echo "❌ Jira update failed with HTTP status $http_status"
+            echo "❌ Jira update failed."
             exit 43
           else
-            echo "✅ Jira issue updated successfully."
+            echo "✅ Jira issue updated."
           fi
 
           # If we're here, it's an issue event
