@@ -15,9 +15,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install dependencies
+        run: sudo apt-get install jq
+
       - name: Sync GitHub issue/comment to Jira
         env:
-          JIRA_API_TOKEN: ATATT3xFfGF0o_Ez0LhlMLt7qDpyBLPD3NoTGPqYnCA7I6jnDYkfpuBGoCgMekcOSjJJ1pAhqHGv4GGGTyMEMewkcQwpyH3Z5ZdGGcUC9hwUnTdPOKvYNQPeEoRAY5VGR64j8gu4leBe0PPKM-tZ2t1FWBIvVNZrnjCllsCqRCqf9l4WcCr4nu4=02CCE1CD
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_USER: anthony.ashenouda@gmail.com
           JIRA_DOMAIN: anthonyashenouda.atlassian.net
         run: |
@@ -28,12 +31,13 @@ jobs:
             exit 1
           fi
 
-          # Extract issue and comment info
           issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
-          comment_body=$(jq -r '.comment.body // empty' "$GITHUB_EVENT_PATH")
-
+          issue_body=$(jq -r '.issue.body // ""' "$GITHUB_EVENT_PATH")
+          comment_body=$(jq -r '.comment.body // ""' "$GITHUB_EVENT_PATH")
+          labels=$(jq -r '[.issue.labels[].name] // [] | join(",")' "$GITHUB_EVENT_PATH")
           echo "📌 Issue Title: $issue_title"
           echo "💬 Comment Body: $comment_body"
+          echo "🏷️ Labels: $labels"
 
           if [[ "$issue_title" =~ ([A-Z]+-[0-9]+) ]]; then
             jira_key="${BASH_REMATCH[1]}"
@@ -49,13 +53,11 @@ jobs:
           ##############################
           # 🧠 Check for /status command
           ##############################
-
           if [[ "$comment_body" =~ ^/status[[:space:]]+([a-zA-Z]+)$ ]]; then
-            status_command="${BASH_REMATCH[1],,}"  # lowercase
+            status_command="${BASH_REMATCH[1],,}"
 
             echo "🪄 Detected /status command: $status_command"
 
-            # Map to Jira transition ID
             case "$status_command" in
               done) transition_id=31 ;;
               inreview) transition_id=2 ;;
@@ -68,7 +70,7 @@ jobs:
                 ;;
             esac
 
-            echo "🔁 Applying Jira transition $transition_id for $jira_key"
+            echo "🔁 Transitioning Jira issue $jira_key to ID $transition_id"
             curl -s -X POST \
               -H "Authorization: Basic $auth_header" \
               -H "Content-Type: application/json" \
@@ -79,112 +81,68 @@ jobs:
             exit 0
           fi
 
-          echo "ℹ️ No /status command. Proceeding with default sync."
+          ##############################
+          # ✍️ Default comment sync
+          ##############################
+          comment_text="${comment_body:-$issue_body}"
+          if [[ -n "$comment_text" ]]; then
+            payload=$(jq -n --arg text "$comment_text" \
+              '{
+                body: {
+                  type: "doc",
+                  version: 1,
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [
+                        {
+                          type: "text",
+                          text: $text
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }')
 
-          # Fallback: Post comment to Jira (as before)
-          comment_text="${comment_body:-$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")}"
-          payload=$(jq -n \
-            --arg text "$comment_text" \
-            '{
-              body: {
-                type: "doc",
-                version: 1,
-                content: [
-                  {
-                    type: "paragraph",
-                    content: [
-                      {
-                        type: "text",
-                        text: $text
-                      }
-                    ]
-                  }
-                ]
-              }
-            }')
-
-          jira_url="$JIRA_BASE_URL/rest/api/3/issue/$jira_key/comment"
-          echo "📤 Posting to Jira: $jira_url"
-          http_status=$(curl -s -w "%{http_code}" -o response.json -X POST \
-            -H "Authorization: Basic $auth_header" \
-            -H "Content-Type: application/json" \
-            --data "$payload" \
-            "$jira_url")
-
-          echo "📥 HTTP Status: $http_status"
-          cat response.json || echo "(empty)"
-
-          if [[ "$http_status" -ge 400 ]]; then
-            echo "❌ Jira update failed."
-            exit 43
-          else
-            echo "✅ Jira issue updated."
-          fi
-
-          # If we're here, it's an issue event
-          issue_title=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
-          issue_body=$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")
-          labels=$(jq -r '[.issue.labels[].name] // [] | join(",")' "$GITHUB_EVENT_PATH")
-
-          echo "📌 Issue Title: $issue_title"
-          echo "📌 Issue Body: $issue_body"
-          echo "🏷️ Labels: $labels"
-
-          if [[ "$issue_title" =~ ([A-Z]+-[0-9]+) ]]; then
-            jira_key="${BASH_REMATCH[1]}"
-            echo "🔗 Found Jira key: $jira_key"
-          else
-            echo "❌ No Jira issue key found in title."
-            exit 0
-          fi
-
-          jira_url="$JIRA_BASE_URL/rest/api/3/issue/$jira_key"
-          payload=$(jq -n \
-            --arg summary "$issue_title" \
-            --arg desc "$issue_body" \
-            '{ fields: { summary: $summary, description: $desc } }')
-
-          echo "📤 Updating Jira issue fields..."
-          http_status=$(curl -s -w "%{http_code}" -o response.json -X PUT \
-            -H "Authorization: Basic $auth_header" \
-            -H "Content-Type: application/json" \
-            --data "$payload" \
-            "$jira_url")
-
-          echo "📥 HTTP Status: $http_status"
-          cat response.json || echo "(empty)"
-
-          if [[ "$http_status" -ge 400 ]]; then
-            echo "❌ Jira update failed with HTTP status $http_status"
-            exit 43
-          else
-            echo "✅ Jira issue updated successfully."
-          fi
-
-          # Optional transitions
-          transition_id=""
-          if [[ "$labels" == *"done"* ]]; then
-            transition_id=31
-          elif [[ "$labels" == *"inprogress"* ]]; then
-            transition_id=21
-          elif [[ "$labels" == *"inreview"* ]]; then
-            transition_id=2
-          elif [[ "$labels" == *"todo"* ]]; then
-            transition_id=11
-          elif [[ "$labels" == *"backlog"* ]]; then
-            transition_id=3
-          fi
-
-          echo "🧠 GitHub Event Type: $GITHUB_EVENT_NAME"
-          echo "🚦 Transition ID selected: $transition_id"
-
-
-          if [[ -n "$transition_id" ]]; then
-            echo "🔄 Transitioning Jira issue $jira_key to ID $transition_id..."
-            curl -s -X POST \
+            jira_url="$JIRA_BASE_URL/rest/api/3/issue/$jira_key/comment"
+            echo "📤 Posting to Jira: $jira_url"
+            http_status=$(curl -s -w "%{http_code}" -o response.json -X POST \
               -H "Authorization: Basic $auth_header" \
               -H "Content-Type: application/json" \
-              --data "{ \"transition\": { \"id\": \"$transition_id\" } }" \
-              "$JIRA_BASE_URL/rest/api/3/issue/$jira_key/transitions"
-            echo "✅ Transition applied."
+              --data "$payload" \
+              "$jira_url")
+
+            echo "📥 HTTP Status: $http_status"
+            cat response.json || echo "(empty)"
+
+            if [[ "$http_status" -ge 400 ]]; then
+              echo "❌ Jira update failed."
+              exit 43
+            else
+              echo "✅ Jira issue updated."
+            fi
+          fi
+
+          ##############################
+          # 🚦 Label-based transition
+          ##############################
+          if [[ "$GITHUB_EVENT_NAME" == "issues" ]]; then
+            transition_id=""
+            if [[ "$labels" == *"done"* ]]; then transition_id=31
+            elif [[ "$labels" == *"inprogress"* ]]; then transition_id=21
+            elif [[ "$labels" == *"inreview"* ]]; then transition_id=2
+            elif [[ "$labels" == *"ready"* ]]; then transition_id=11
+            elif [[ "$labels" == *"backlog"* ]]; then transition_id=3
+            fi
+
+            if [[ -n "$transition_id" ]]; then
+              echo "🔄 Transitioning Jira issue $jira_key to ID $transition_id..."
+              curl -s -X POST \
+                -H "Authorization: Basic $auth_header" \
+                -H "Content-Type: application/json" \
+                --data "{ \"transition\": { \"id\": \"$transition_id\" } }" \
+                "$JIRA_BASE_URL/rest/api/3/issue/$jira_key/transitions"
+              echo "✅ Transition applied based on label."
+            fi
           fi
