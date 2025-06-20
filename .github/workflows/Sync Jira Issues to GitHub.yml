@@ -168,12 +168,19 @@ jobs:
 
             echo "✅ Created GitHub issue: $issue_url"
 
-            item_id=$(gh api graphql -f query='
-              mutation($projectId:ID!, $contentId:ID!) {
-                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
-                  item { id }
-                }
-              }' -F projectId="$PROJECT_ID" -F contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
+            add_item_output=$(gh api graphql -f query='
+            mutation($projectId:ID!, $contentId:ID!) {
+              addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                item { id }
+              }
+            }' -F projectId="$PROJECT_ID" -F contentId="$issue_node_id" || true)
+          
+          item_id=$(echo "$add_item_output" | jq -r '.data.addProjectV2ItemById.item.id')
+          
+          if [[ -z "$item_id" || "$item_id" == "null" ]]; then
+            echo "❌ Failed to add issue to project. Skipping."
+            continue
+          fi
 
             status_option_id="${STATUS_MAP[$status]}"
             if [[ -z "$status_option_id" ]]; then
