@@ -181,6 +181,12 @@ jobs:
               continue
             fi
 
+            echo "🔍 Debugging GitHub project update:"
+            echo "  Project ID: $PROJECT_ID"
+            echo "  Item ID: $item_id"
+            echo "  Status Field ID: $STATUS_FIELD_ID"
+            echo "  Status Option ID: $status_option_id"
+
             gh api graphql --silent -f query='
               mutation (
                 $project: ID!
