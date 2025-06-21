@@ -233,3 +233,4 @@ jobs:
             echo "✅ Status set to '$status'"
 
           done
+        shell: bash {0}
