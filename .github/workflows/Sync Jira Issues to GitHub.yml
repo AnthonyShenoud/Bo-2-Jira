@@ -109,10 +109,9 @@ jobs:
 
             issue_payload=$(jq -n \
               --arg title "$github_title" \
-              --arg body "🔗 Jira issue: https://$JIRA_DOMAIN/browse/$jira_key\n\n### Jira: $jira_key\n\n**Description**: $body\n\n**Due**: $due_date\n**Input**: $input\n**Output**: $output\n**Team**: $team\n**Priority**: $priority" \
+              --arg body "🔗 Jira issue: https://$JIRA_DOMAIN/browse/$jira_key\n\n### Jira: $jira_key\n\n**Description**: $body\n\n**Due**: $due_date\n**Input**: $input\n**Output**: $output\n**Team**: $team\n**Priority**: $priority"
               --argjson assignees "$assignees_json" \
               '{title: $title, body: $body, assignees: $assignees}')
-
 
             issue_response=$(curl -s -X POST \
               -H "Authorization: token $GITHUB_TOKEN" \
@@ -168,31 +167,18 @@ jobs:
 
             echo "✅ Created GitHub issue: $issue_url"
 
-            add_item_output=$(gh api graphql -f query='
-            mutation($projectId:ID!, $contentId:ID!) {
-              addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
-                item { id }
-              }
-            }' -F projectId="$PROJECT_ID" -F contentId="$issue_node_id" || true)
-          
-          item_id=$(echo "$add_item_output" | jq -r '.data.addProjectV2ItemById.item.id')
-          
-          if [[ -z "$item_id" || "$item_id" == "null" ]]; then
-            echo "❌ Failed to add issue to project. Skipping."
-            continue
-          fi
+            item_id=$(gh api graphql -f query='
+              mutation($projectId:ID!, $contentId:ID!) {
+                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                  item { id }
+                }
+              }' -F projectId="$PROJECT_ID" -F contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
 
             status_option_id="${STATUS_MAP[$status]}"
             if [[ -z "$status_option_id" ]]; then
               echo "⚠️ No valid status mapping for '$status'. Skipping status update."
               continue
             fi
-
-            echo "🔍 Debugging GitHub project update:"
-            echo "  Project ID: $PROJECT_ID"
-            echo "  Item ID: $item_id"
-            echo "  Status Field ID: $STATUS_FIELD_ID"
-            echo "  Status Option ID: $status_option_id"
 
             gh api graphql --silent -f query='
               mutation (
