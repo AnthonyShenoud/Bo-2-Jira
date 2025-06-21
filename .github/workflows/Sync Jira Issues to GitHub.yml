@@ -175,6 +175,11 @@ jobs:
                 }
               }' -F projectId="$PROJECT_ID" -F contentId="$issue_node_id" --jq '.data.addProjectV2ItemById.item.id')
 
+            if [[ -z "$item_id" || "$item_id" == "null" ]]; then
+              echo "❌ Failed to add issue to project. Skipping."
+              continue
+            fi
+
             status_option_id="${STATUS_MAP[$status]}"
             if [[ -z "$status_option_id" ]]; then
               echo "⚠️ No valid status mapping for '$status'. Skipping status update."
