@@ -192,7 +192,7 @@ jobs:
             echo "  Status Field ID: $STATUS_FIELD_ID"
             echo "  Status Option ID: $status_option_id"
 
-            gh api graphql --silent -f query='
+            update_status_response=$(gh api graphql --silent -f query='
               mutation (
                 $project: ID!
                 $item: ID!
@@ -215,10 +215,14 @@ jobs:
               -f project="$PROJECT_ID" \
               -f item="$item_id" \
               -f status_field="$STATUS_FIELD_ID" \
-              -f status_value="$status_option_id" || {
-                echo "⚠️ Failed to update status for item $item_id. Skipping."
-                continue
-              }
-
+              -f status_value="$status_option_id" 2>&1)
+            
+            if [[ $? -ne 0 || -z "$update_status_response" || "$update_status_response" == *"errors"* ]]; then
+              echo "⚠️ Failed to update status for item $item_id. Skipping."
+              echo "🔴 Error details: $update_status_response"
+              continue
+            fi
+            
             echo "✅ Status set to '$status'"
+
           done
