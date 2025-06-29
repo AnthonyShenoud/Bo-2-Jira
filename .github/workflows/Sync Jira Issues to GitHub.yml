@@ -101,9 +101,47 @@ jobs:
             existing_issue=$(gh issue list --repo "$REPO" --search "$jira_key" --state "all" --json number,title | jq -r ".[] | select(.title | contains(\"[$jira_key]\")) | .number")
 
             if [[ -n "$existing_issue" ]]; then
-              echo "⚠️ Issue [$jira_key] already exists in GitHub as #$existing_issue. Skipping creation."
+              echo "🔄 Issue [$jira_key] already exists as #$existing_issue. Checking for updates..."
+            
+              # Fetch current GitHub issue details
+              current_issue=$(gh issue view "$existing_issue" --repo "$REPO" --json title,body,assignees)
+              current_title=$(echo "$current_issue" | jq -r '.title')
+              current_body=$(echo "$current_issue" | jq -r '.body')
+              current_assignees=$(echo "$current_issue" | jq -r '[.assignees[].login] | join(",")')
+            
+              # Format desired content
+              desired_title="[$jira_key] $title"
+              desired_body="🔗 Jira issue: https://$JIRA_DOMAIN/browse/$jira_key\n\n### Jira: $jira_key\n\n**Description**: $body\n\n**Due**: $due_date\n**Input**: $input\n**Output**: $output\n**Team**: $team\n**Priority**: $priority"
+              desired_assignees=$(echo "$assignees_json" | jq -r 'join(",")')
+            
+              # Compare and update if different
+              update_needed=false
+            
+              [[ "$current_title" != "$desired_title" ]] && update_needed=true
+              [[ "$current_body" != "$desired_body" ]] && update_needed=true
+              [[ "$current_assignees" != "$desired_assignees" ]] && update_needed=true
+            
+              if [[ "$update_needed" == true ]]; then
+                echo "✏️ Updating GitHub issue #$existing_issue..."
+            
+                gh issue edit "$existing_issue" \
+                  --repo "$REPO" \
+                  --title "$desired_title" \
+                  --body "$desired_body" \
+                  --assignee "$desired_assignees"
+            
+                echo "✅ Issue #$existing_issue updated."
+                gh issue comment "$existing_issue" \
+                  --repo "$REPO" \
+                  --body "🔁 Synced with Jira ticket [$jira_key](https://$JIRA_DOMAIN/browse/$jira_key)"
+
+              else
+                echo "✅ No update needed for issue #$existing_issue."
+              fi
+            
               continue
             fi
+            
 
             echo "Creating GitHub issue for: $github_title"
 
