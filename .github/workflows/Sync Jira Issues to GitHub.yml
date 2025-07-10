@@ -124,53 +124,7 @@ jobs:
             if [[ -n "$existing_issue" ]]; then
               echo "🔄 Issue [$jira_key] already exists as #$existing_issue. Checking for updates..."
 
-              # Fetch Jira comments
-              jira_comments=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
-                -H "Accept: application/json" \
-                "https://$JIRA_DOMAIN/rest/api/2/issue/$jira_key/comment?orderBy=-created&maxResults=1")
 
-              jira_comments=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
-              -H "Accept: application/json" \
-              "https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key/comment?orderBy=-created&maxResults=1&expand=renderedBody")
-              
-              # Extract latest comment body (plain text)
-              latest_comment=$(echo "$jira_comments" | jq -r '
-              .comments[0].body.content
-              | map(
-                  if .type == "paragraph" then
-                    (.content | map(select(.type == "text") | .text) | join(""))
-                  else ""
-                  end
-                )
-              | join("\n\n")
-              // empty
-            ')
-
-            echo "🔍 Final parsed Jira comment:"
-            echo "<<<$latest_comment>>>"
-
-
-              echo "🧾 Raw Jira comment JSON:"
-              echo "$jira_comments" | jq '.comments[0].body'
-              
-              # Fetch latest GitHub comment (safely)
-              last_gh_comment=$(gh issue view "$existing_issue" --repo "$REPO" --json comments | jq -r '.comments[-1].body // ""')
-              
-              # Normalize for comparison
-              normalized_jira=$(echo "$latest_comment" | tr -s '[:space:]' ' ')
-              normalized_gh=$(echo "$last_gh_comment" | tr -s '[:space:]' ' ')
-              
-              # Post if different
-              if [[ -n "$normalized_jira" && "$normalized_jira" != "$normalized_gh" ]]; then
-                echo "💬 Posting latest Jira comment to GitHub..."
-                gh issue comment "$existing_issue" --repo "$REPO" \
-                  --body "💬 Comment from Jira:\n\n$latest_comment"
-              else
-                echo "💬 No new Jira comment to sync."
-              fi
-
-
-            
               # Fetch current GitHub issue details
               current_issue=$(gh issue view "$existing_issue" --repo "$REPO" --json title,body,assignees)
               current_title=$(echo "$current_issue" | jq -r '.title')
@@ -188,16 +142,16 @@ jobs:
               [[ "$current_title" != "$desired_title" ]] && update_needed=true
               [[ "$current_body" != "$desired_body" ]] && update_needed=true
               [[ "$current_assignees" != "$desired_assignees" ]] && update_needed=true
-              
-              # Get latest GitHub comment
-              echo "🔍 Jira raw comment doc:"
-              echo "$jira_comments" | jq '.comments[-1].body'
-              echo "🔍 Parsed latest_comment: <<<$latest_comment>>>"
-              
-              # Get latest GitHub comment
-              last_gh_comment=$(gh issue view "$existing_issue" --repo "$REPO" --json comments --jq '.comments[-1].body')
-              echo "🔍 Last GitHub comment: <<<$last_gh_comment>>>"
-          
+
+              existing_comment=$(gh issue view "$existing_issue" --repo "$REPO" --json comments --jq '.comments[].body')
+              if ! grep -q "https://$JIRA_DOMAIN/browse/$jira_key" <<< "$existing_comment"; then
+                echo "💬 Posting static Jira sync comment..."
+                gh issue comment "$existing_issue" --repo "$REPO" \
+                  --body "🔁 Synced with Jira ticket [$jira_key](https://$JIRA_DOMAIN/browse/$jira_key)"
+              else
+                echo "✅ Jira link already posted. Skipping comment."
+              fi
+
               if [[ "$update_needed" == true ]]; then
                 echo "✏️ Updating GitHub issue #$existing_issue..."
             
@@ -302,15 +256,11 @@ jobs:
             issue_node_id=$(echo "$issue_response" | jq -r '.node_id')
             issue_url=$(echo "$issue_response" | jq -r '.html_url')
             
-            echo "✅ Created GitHub issue: $issue_url"
-            
             # ➕ Add comment to Jira with backlink to GitHub issue
-            issue_number=$(echo "$issue_url" | grep -oE '[0-9]+$')
+            issue_number=$(echo "$issue_response" | jq -r '.number')
             
-            gh issue comment "$issue_number" \
-              --repo "$REPO" \
+            gh issue comment "$issue_number" --repo "$REPO" \
               --body "🔁 Synced with Jira ticket [$jira_key](https://$JIRA_DOMAIN/browse/$jira_key)"
-
 
             if [[ "$issue_node_id" == "null" || -z "$issue_node_id" ]]; then
               echo "⚠️ Failed to create GitHub issue for $jira_key"
