@@ -174,7 +174,7 @@ jobs:
                 echo "✅ Issue #$existing_issue updated."
                 gh issue comment "$existing_issue" \
                   --repo "$REPO" \
-                  --body "🔁 Synced with Jira ticket [$jira_key](https://$JIRA_DOMAIN/browse/$jira_key)"
+                  --body "🔁 Synced with Jira ticket [$jira_key](https://anthonyashenouda.atlassian.net/browse/$jira_key)"
 
                       echo "🔄 Updating project status for issue #$existing_issue..."
 
@@ -260,7 +260,7 @@ jobs:
             issue_number=$(echo "$issue_response" | jq -r '.number')
             
             gh issue comment "$issue_number" --repo "$REPO" \
-              --body "🔁 Synced with Jira ticket [$jira_key](https://$JIRA_DOMAIN/browse/$jira_key)"
+              --body "🔁 Synced with Jira ticket [$jira_key](https://anthonyashenouda.atlassian.net/browse/$jira_key)"
 
             if [[ "$issue_node_id" == "null" || -z "$issue_node_id" ]]; then
               echo "⚠️ Failed to create GitHub issue for $jira_key"
