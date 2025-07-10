@@ -131,12 +131,13 @@ jobs:
               
                 # drill into the doc structure:
                 latest_comment=$(echo "$jira_comments" | jq -r '
-                  .comments[-1].body.content
-                    | map(.content // [])  # unwrap paragraphs
-                    | flatten
-                    | map(select(.text != null).text)
-                    | join("")            # join all text nodes
-                ')
+                  .comments[-1].body.content[]
+                  | select(.type == "paragraph")
+                  | .content[]
+                  | select(.type == "text")
+                  | .text
+                ' | tr '\n' ' ')
+
 
             
               # Fetch current GitHub issue details
