@@ -125,11 +125,19 @@ jobs:
               echo "🔄 Issue [$jira_key] already exists as #$existing_issue. Checking for updates..."
 
                 # Fetch Jira comments and post the latest one to GitHub
-                jira_comments=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
+                  jira_comments=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
                   -H "Accept: application/json" \
                   "https://$JIRA_DOMAIN/rest/api/2/issue/$jira_key/comment")
               
-                latest_comment=$(echo "$jira_comments" | jq -r '.comments[-1].body')
+                # drill into the doc structure:
+                latest_comment=$(echo "$jira_comments" | jq -r '
+                  .comments[-1].body.content
+                    | map(.content // [])  # unwrap paragraphs
+                    | flatten
+                    | map(select(.text != null).text)
+                    | join("")            # join all text nodes
+                ')
+
             
               # Fetch current GitHub issue details
               current_issue=$(gh issue view "$existing_issue" --repo "$REPO" --json title,body,assignees)
@@ -150,9 +158,15 @@ jobs:
               [[ "$current_assignees" != "$desired_assignees" ]] && update_needed=true
               
               # Get latest GitHub comment
-              last_gh_comment=$(gh issue view "$existing_issue" --repo "$REPO" --json comments --jq '.comments[-1].body')
+              echo "🔍 Jira raw comment doc:"
+              echo "$jira_comments" | jq '.comments[-1].body'
+              echo "🔍 Parsed latest_comment: <<<$latest_comment>>>"
               
-              if [[ -n "$latest_comment" && "$latest_comment" != "null" && "$latest_comment" != "$last_gh_comment" ]]; then
+              # Get latest GitHub comment
+              last_gh_comment=$(gh issue view "$existing_issue" --repo "$REPO" --json comments --jq '.comments[-1].body')
+              echo "🔍 Last GitHub comment: <<<$last_gh_comment>>>"
+              
+              if [[ -n "$latest_comment" && "$latest_comment" != "$last_gh_comment" ]]; then
                 echo "💬 Posting latest Jira comment to GitHub..."
                 gh issue comment "$existing_issue" --repo "$REPO" \
                   --body "💬 Comment from Jira:\n\n$latest_comment"
