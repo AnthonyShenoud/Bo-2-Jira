@@ -127,7 +127,7 @@ jobs:
               # Fetch Jira comments
               jira_comments=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
                 -H "Accept: application/json" \
-                "https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key/comment?orderBy=-created&maxResults=1")
+                "https://$JIRA_DOMAIN/rest/api/2/issue/$jira_key/comment?orderBy=-created&maxResults=1")
               
               # Extract latest comment body (plain text)
               latest_comment=$(echo "$jira_comments" | jq -r '
@@ -141,6 +141,10 @@ jobs:
                   )
                 | join("\n\n")
                 ')
+
+              echo "🧾 Raw Jira comment JSON:"
+              echo "$jira_comments" | jq '.comments[0].body'
+
                 
               echo "$jira_comments" | jq '.comments[0].body'
               echo "$jira_comments" | jq -r '
@@ -154,7 +158,6 @@ jobs:
                   )
                 | join("\n\n")
                 '
-
 
               
               # Fetch latest GitHub comment (safely)
