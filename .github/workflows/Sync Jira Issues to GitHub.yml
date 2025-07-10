@@ -147,7 +147,7 @@ jobs:
               if ! grep -q "https://$JIRA_DOMAIN/browse/$jira_key" <<< "$existing_comment"; then
                 echo "💬 Posting static Jira sync comment..."
                 gh issue comment "$existing_issue" --repo "$REPO" \
-                  --body "🔁 Synced with Jira ticket [$jira_key](https://$JIRA_DOMAIN/browse/$jira_key)"
+                  --body "🔁 Synced with Jira ticket [$jira_key](https://anthonyashenouda.atlassian.net/browse/$jira_key)"
               else
                 echo "✅ Jira link already posted. Skipping comment."
               fi
