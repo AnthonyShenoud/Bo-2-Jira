@@ -134,26 +134,24 @@ jobs:
               "https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key/comment?orderBy=-created&maxResults=1&expand=renderedBody")
               
               # Extract latest comment body (plain text)
-              latest_comment=$(echo "$jira_comments" | jq -r '.comments[0].body // empty')
+              latest_comment=$(echo "$jira_comments" | jq -r '
+              .comments[0].body.content
+              | map(
+                  if .type == "paragraph" then
+                    (.content | map(select(.type == "text") | .text) | join(""))
+                  else ""
+                  end
+                )
+              | join("\n\n")
+              // empty
+            ')
+
+            echo "🔍 Final parsed Jira comment:"
+            echo "<<<$latest_comment>>>"
 
 
               echo "🧾 Raw Jira comment JSON:"
               echo "$jira_comments" | jq '.comments[0].body'
-
-                
-              echo "$jira_comments" | jq '.comments[0].body'
-              echo "$jira_comments" | jq -r '
-                .comments[0].body.content
-                | map(
-                    if .type == "paragraph" then
-                      (.content | map(.text) | join(""))
-                    else
-                      ""
-                    end
-                  )
-                | join("\n\n")
-                '
-
               
               # Fetch latest GitHub comment (safely)
               last_gh_comment=$(gh issue view "$existing_issue" --repo "$REPO" --json comments | jq -r '.comments[-1].body // ""')
