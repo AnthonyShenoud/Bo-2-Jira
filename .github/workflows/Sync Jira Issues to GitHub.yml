@@ -125,19 +125,27 @@ jobs:
               echo "🔄 Issue [$jira_key] already exists as #$existing_issue. Checking for updates..."
 
                 # Fetch Jira comments and post the latest one to GitHub
-                  jira_comments=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
+                jira_comments=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
                   -H "Accept: application/json" \
-                  "https://$JIRA_DOMAIN/rest/api/2/issue/$jira_key/comment")
-              
-                # drill into the doc structure:
-                latest_comment=$(echo "$jira_comments" | jq -r '
-                  .comments[-1].body.content[]
-                  | select(.type == "paragraph")
-                  | .content[]
-                  | select(.type == "text")
-                  | .text
-                ' | tr '\n' ' ')
-
+                  "https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key/comment?orderBy=-created&maxResults=1")
+                
+                if [[ "$(echo "$jira_comments" | jq '.comments | length')" -eq 0 ]]; then
+                  echo "🛑 No comments found in Jira for $jira_key."
+                  latest_comment=""
+                else
+                  latest_comment=$(echo "$jira_comments" | jq -r '
+                    .comments[0] as $c
+                    | if ($c.body | type) == "string" then
+                          $c.body
+                      else
+                          ($c.body.content[]?
+                           | select(.type=="paragraph")
+                           | .content[]?
+                           | select(.type=="text")
+                           | .text)
+                      end
+                  ' | tr -s "\n" " " | sed -E "s/[[:space:]]+$//")
+                fi
 
             
               # Fetch current GitHub issue details
