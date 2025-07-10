@@ -124,28 +124,35 @@ jobs:
             if [[ -n "$existing_issue" ]]; then
               echo "🔄 Issue [$jira_key] already exists as #$existing_issue. Checking for updates..."
 
-                # Fetch Jira comments and post the latest one to GitHub
-                jira_comments=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
-                  -H "Accept: application/json" \
-                  "https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key/comment?orderBy=-created&maxResults=1")
-                
-                if [[ "$(echo "$jira_comments" | jq '.comments | length')" -eq 0 ]]; then
-                  echo "🛑 No comments found in Jira for $jira_key."
-                  latest_comment=""
-                else
-                  latest_comment=$(echo "$jira_comments" | jq -r '
-                    .comments[0] as $c
-                    | if ($c.body | type) == "string" then
-                          $c.body
-                      else
-                          ($c.body.content[]?
-                           | select(.type=="paragraph")
-                           | .content[]?
-                           | select(.type=="text")
-                           | .text)
-                      end
-                  ' | tr -s "\n" " " | sed -E "s/[[:space:]]+$//")
-                fi
+              # Fetch Jira comments
+              jira_comments=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
+                -H "Accept: application/json" \
+                "https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key/comment?orderBy=-created&maxResults=1")
+              
+              # Extract latest comment body (plain text)
+              latest_comment=$(echo "$jira_comments" | jq -r '
+                .comments[0].body.content[]
+                | select(.type == "paragraph")
+                | .content[]
+                | select(.type == "text")
+                | .text' | tr '\n' ' ' | sed -E 's/\s+/ /g' | sed -E 's/ $//')
+              
+              # Fetch latest GitHub comment (safely)
+              last_gh_comment=$(gh issue view "$existing_issue" --repo "$REPO" --json comments | jq -r '.comments[-1].body // ""')
+              
+              # Normalize for comparison
+              normalized_jira=$(echo "$latest_comment" | tr -s '[:space:]' ' ')
+              normalized_gh=$(echo "$last_gh_comment" | tr -s '[:space:]' ' ')
+              
+              # Post if different
+              if [[ -n "$normalized_jira" && "$normalized_jira" != "$normalized_gh" ]]; then
+                echo "💬 Posting latest Jira comment to GitHub..."
+                gh issue comment "$existing_issue" --repo "$REPO" \
+                  --body "💬 Comment from Jira:\n\n$latest_comment"
+              else
+                echo "💬 No new Jira comment to sync."
+              fi
+
 
             
               # Fetch current GitHub issue details
@@ -174,16 +181,7 @@ jobs:
               # Get latest GitHub comment
               last_gh_comment=$(gh issue view "$existing_issue" --repo "$REPO" --json comments --jq '.comments[-1].body')
               echo "🔍 Last GitHub comment: <<<$last_gh_comment>>>"
-              
-              if [[ -n "$latest_comment" && "$latest_comment" != "$last_gh_comment" ]]; then
-                echo "💬 Posting latest Jira comment to GitHub..."
-                gh issue comment "$existing_issue" --repo "$REPO" \
-                  --body "💬 Comment from Jira:\n\n$latest_comment"
-              else
-                echo "💬 No new Jira comment to sync."
-              fi
-
-            
+          
               if [[ "$update_needed" == true ]]; then
                 echo "✏️ Updating GitHub issue #$existing_issue..."
             
@@ -262,8 +260,6 @@ jobs:
                           echo "⚠️ No matching status option for Jira status '$status'. Skipping status update."
                         fi
                       fi
-
-
               else
                 echo "✅ No update needed for issue #$existing_issue."
               fi
