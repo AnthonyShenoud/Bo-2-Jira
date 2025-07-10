@@ -130,17 +130,8 @@ jobs:
                 "https://$JIRA_DOMAIN/rest/api/2/issue/$jira_key/comment?orderBy=-created&maxResults=1")
               
               # Extract latest comment body (plain text)
-              latest_comment=$(echo "$jira_comments" | jq -r '
-                .comments[0].body.content
-                | map(
-                    if .type == "paragraph" then
-                      (.content | map(.text) | join(""))
-                    else
-                      ""
-                    end
-                  )
-                | join("\n\n")
-                ')
+              latest_comment=$(echo "$jira_comments" | jq -r '.comments[0].body // empty')
+
 
               echo "🧾 Raw Jira comment JSON:"
               echo "$jira_comments" | jq '.comments[0].body'
