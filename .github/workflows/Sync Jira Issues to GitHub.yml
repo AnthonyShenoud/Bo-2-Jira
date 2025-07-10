@@ -128,6 +128,10 @@ jobs:
               jira_comments=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
                 -H "Accept: application/json" \
                 "https://$JIRA_DOMAIN/rest/api/2/issue/$jira_key/comment?orderBy=-created&maxResults=1")
+
+              jira_comments=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
+              -H "Accept: application/json" \
+              "https://$JIRA_DOMAIN/rest/api/3/issue/$jira_key/comment?orderBy=-created&maxResults=1&expand=renderedBody")
               
               # Extract latest comment body (plain text)
               latest_comment=$(echo "$jira_comments" | jq -r '.comments[0].body // empty')
