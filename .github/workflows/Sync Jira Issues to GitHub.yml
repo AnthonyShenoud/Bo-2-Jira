@@ -130,13 +130,6 @@ jobs:
                   "https://$JIRA_DOMAIN/rest/api/2/issue/$jira_key/comment")
               
                 latest_comment=$(echo "$jira_comments" | jq -r '.comments[-1].body')
-              
-                if [[ -n "$latest_comment" && "$latest_comment" != "null" ]]; then
-                  echo "💬 Posting latest Jira comment to GitHub..."
-                  gh issue comment "$existing_issue" --repo "$REPO" \
-                    --body "💬 Comment from Jira:\n\n$latest_comment"
-                fi
-
             
               # Fetch current GitHub issue details
               current_issue=$(gh issue view "$existing_issue" --repo "$REPO" --json title,body,assignees)
@@ -155,6 +148,18 @@ jobs:
               [[ "$current_title" != "$desired_title" ]] && update_needed=true
               [[ "$current_body" != "$desired_body" ]] && update_needed=true
               [[ "$current_assignees" != "$desired_assignees" ]] && update_needed=true
+              
+              # Get latest GitHub comment
+              last_gh_comment=$(gh issue view "$existing_issue" --repo "$REPO" --json comments --jq '.comments[-1].body')
+              
+              if [[ -n "$latest_comment" && "$latest_comment" != "null" && "$latest_comment" != "$last_gh_comment" ]]; then
+                echo "💬 Posting latest Jira comment to GitHub..."
+                gh issue comment "$existing_issue" --repo "$REPO" \
+                  --body "💬 Comment from Jira:\n\n$latest_comment"
+              else
+                echo "💬 No new Jira comment to sync."
+              fi
+
             
               if [[ "$update_needed" == true ]]; then
                 echo "✏️ Updating GitHub issue #$existing_issue..."
