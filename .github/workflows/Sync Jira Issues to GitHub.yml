@@ -39,10 +39,9 @@ jobs:
       
           nextPageToken=""
           while : ; do
-            - url="https://$JIRA_DOMAIN/rest/api/3/search/jql?jql=$jql&maxResults=100"
-            + wanted_fields="id,key,summary,description,duedate,priority,status,assignee,customfield_10039,customfield_10040,updated"
-            + fields_qs=$(jq -rn --arg s "$wanted_fields" '@uri "\($s)"')
-            + url="https://$JIRA_DOMAIN/rest/api/3/search/jql?jql=$jql&maxResults=100&fields=$fields_qs"
+            wanted_fields="id,key,summary,description,duedate,priority,status,assignee,customfield_10039,customfield_10040,updated"
+            fields_qs=$(jq -rn --arg s "$wanted_fields" '@uri "\($s)"')
+            url="https://$JIRA_DOMAIN/rest/api/3/search/jql?jql=$jql&maxResults=100&fields=$fields_qs"
 
             if [[ -n "$nextPageToken" && "$nextPageToken" != "null" ]]; then
               url="$url&nextPageToken=$(jq -rn --arg t "$nextPageToken" '@uri "\($t)"')"
@@ -157,12 +156,10 @@ jobs:
             github_title="[$jira_key] $title"
 
             current_issue=$(gh issue list --repo "$REPO" --search "$jira_key" --state "all" --json number,title,updatedAt | jq -c ".[] | select(.title | contains(\"[$jira_key]\"))")
-            
             existing_issue=$(echo "$current_issue" | jq -r '.number')
-
+            github_updated_at=$(echo "$current_issue" | jq -r '.updatedAt // empty')
             
             jira_updated=$(echo "$issue" | jq -r '.updated // empty')
-            github_updated_at=${github_updated_at:-}
             
             if [[ -n "$jira_updated" && -n "$github_updated_at" ]]; then
               jira_epoch=$(date -d "$jira_updated" +%s)
