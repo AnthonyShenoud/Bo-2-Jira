@@ -22,7 +22,7 @@ jobs:
         run: |
           echo "$GH_PERSONAL_ACCESS_TOKEN" | gh auth login --with-token
 
-      - name: Fetch Jira Issues (v3, robust, paginated)
+      - name: Fetch Jira Issues (enhanced JQL, paginated)
         env:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_DOMAIN: "anthonyashenouda.atlassian.net"
@@ -30,46 +30,44 @@ jobs:
           JIRA_USER: "anthony.ashenouda@gmail.com"
         run: |
           set -euo pipefail
+          echo "Fetching Jira issues (enhanced JQL)..."
       
-          echo "Fetching Jira issues..."
           : > jira_issues.jsonl
       
-          startAt=0
-          maxResults=100
-      
-          # URL-encode JQL safely
+          # URL-encode the JQL: project = SCRUM
           jql=$(jq -rn --arg p "$JIRA_PROJECT_KEY" '@uri "project=\($p)"')
       
+          nextPageToken=""
           while : ; do
-            echo "👉 Querying batch startAt=$startAt"
-            http_status=0
-            response=$(
-              curl --silent --show-error --fail-with-body \
-                -u "$JIRA_USER:$JIRA_API_TOKEN" \
-                -H "Accept: application/json" \
-                "https://$JIRA_DOMAIN/rest/api/3/search?jql=$jql&startAt=$startAt&maxResults=$maxResults" \
-                -w '\n%{http_code}'
-            ) || { echo "❌ curl failed (network/auth)."; exit 1; }
+            url="https://$JIRA_DOMAIN/rest/api/3/search/jql?jql=$jql&maxResults=100"
+            if [[ -n "$nextPageToken" && "$nextPageToken" != "null" ]]; then
+              url="$url&nextPageToken=$(jq -rn --arg t "$nextPageToken" '@uri "\($t)"')"
+            fi
       
-            # Split body and status
+            echo "👉 GET $url"
+            # capture body + status without aborting early
+            response=$(curl --silent --show-error \
+              -u "$JIRA_USER:$JIRA_API_TOKEN" \
+              -H "Accept: application/json" \
+              -w $'\n%{http_code}' "$url") || { echo "❌ curl transport error"; exit 1; }
+      
             body="${response%$'\n'*}"
-            http_status="${response##*$'\n'}"
+            code="${response##*$'\n'}"
       
-            if [[ "$http_status" -lt 200 || "$http_status" -ge 300 ]]; then
-              echo "❌ Jira API returned HTTP $http_status"
+            if [[ "$code" -lt 200 || "$code" -ge 300 ]]; then
+              echo "❌ Jira API HTTP $code"
               echo "Response body:"
               echo "$body"
               exit 1
             fi
       
-            # Quick sanity: bail out if the payload doesn't have .issues
+            # sanity & normalize
             if ! jq -e 'has("issues") and (.issues|type=="array")' >/dev/null 2>&1 <<<"$body"; then
-              echo "❌ Unexpected Jira payload (no .issues). Raw body:"
+              echo "❌ Unexpected payload (no .issues). Raw:"
               echo "$body"
               exit 1
             fi
       
-            # Append normalized issues to a jsonl file (safe-optional field access with ?)
             jq -c '
               .issues[] |
               {
@@ -88,21 +86,20 @@ jobs:
               }
             ' <<<"$body" >> jira_issues.jsonl
       
-            # Pagination
-            total=$(jq -r '.total' <<<"$body")
-            fetched=$(jq -r '.startAt + .maxResults' <<<"$body")
-            if (( fetched >= total )); then
+            # enhanced JQL pagination uses nextPageToken + isLast
+            is_last=$(jq -r '.isLast // false' <<<"$body")
+            nextPageToken=$(jq -r '.nextPageToken // empty' <<<"$body")
+      
+            if [[ "$is_last" == "true" || -z "$nextPageToken" ]]; then
               break
             fi
-            startAt=$fetched
           done
       
-          # Convert jsonl to a proper json array
           jq -s '.' jira_issues.jsonl > jira_issues.json
-      
           echo "✅ Wrote $(jq 'length' jira_issues.json) issues to jira_issues.json"
-          echo "First item (preview):"
-          jq '.[0]' jira_issues.json
+          jq '.[0]' jira_issues.json || true
+
+
 
       - name: Debug Jira JSON Content
         run: cat jira_issues.json
