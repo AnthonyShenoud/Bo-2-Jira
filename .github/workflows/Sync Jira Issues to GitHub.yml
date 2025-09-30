@@ -39,7 +39,11 @@ jobs:
       
           nextPageToken=""
           while : ; do
-            url="https://$JIRA_DOMAIN/rest/api/3/search/jql?jql=$jql&maxResults=100"
+            - url="https://$JIRA_DOMAIN/rest/api/3/search/jql?jql=$jql&maxResults=100"
+            + wanted_fields="id,key,summary,description,duedate,priority,status,assignee,customfield_10039,customfield_10040,updated"
+            + fields_qs=$(jq -rn --arg s "$wanted_fields" '@uri "\($s)"')
+            + url="https://$JIRA_DOMAIN/rest/api/3/search/jql?jql=$jql&maxResults=100&fields=$fields_qs"
+
             if [[ -n "$nextPageToken" && "$nextPageToken" != "null" ]]; then
               url="$url&nextPageToken=$(jq -rn --arg t "$nextPageToken" '@uri "\($t)"')"
             fi
@@ -155,23 +159,22 @@ jobs:
             current_issue=$(gh issue list --repo "$REPO" --search "$jira_key" --state "all" --json number,title,updatedAt | jq -c ".[] | select(.title | contains(\"[$jira_key]\"))")
             
             existing_issue=$(echo "$current_issue" | jq -r '.number')
-            github_updated_at=$(echo "$current_issue" | jq -r '.updatedAt')
 
-            jira_updated=$(echo "$issue" | jq -r '.updated')
-
-            echo "📅 Jira updated at: $jira_updated"
-            echo "📅 GitHub updated at: $github_updated_at"
             
-            # Convert timestamps to Unix epoch for comparison
-            jira_epoch=$(date -d "$jira_updated" +%s)
-            github_epoch=$(date -d "$github_updated_at" +%s)
+            jira_updated=$(echo "$issue" | jq -r '.updated // empty')
+            github_updated_at=${github_updated_at:-}
             
-            if [[ "$jira_epoch" -le "$github_epoch" ]]; then
-              echo "✅ No update needed (Jira is older or same as GitHub)."
-              continue
+            if [[ -n "$jira_updated" && -n "$github_updated_at" ]]; then
+              jira_epoch=$(date -d "$jira_updated" +%s)
+              github_epoch=$(date -d "$github_updated_at" +%s)
+              if (( jira_epoch <= github_epoch )); then
+                echo "✅ No update needed (Jira older/same)."
+                continue
+              fi
             else
-              echo "⏫ Jira issue is newer. Will update."
+              echo "ℹ️ Missing timestamps; proceeding to create/update."
             fi
+
 
 
             if [[ -n "$existing_issue" ]]; then
